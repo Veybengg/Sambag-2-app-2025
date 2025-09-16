@@ -1,10 +1,10 @@
 {
   "expo": {
-    "name": "sambag2app",
+    "name": "Sambag 2 EAS",
     "slug": "sambag2app",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "./assets/applogo.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "splash": {
@@ -12,18 +12,29 @@
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
-    "ios": {
-      "supportsTablet": true
-    },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": true,
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyAYNfq62UV7jSp-3h6oVFUSiJ_To9l5Fmc"
+        }
+      },
+      "package": "com.sambag2.sambag2app"
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "extra": {
+      "eas": {
+        "projectId": "43826664-3cd5-4223-aed9-7f9abd21b90a"
+      }
+    },
+    "plugins": [
+      "expo-video"
+    ]
   }
 }
