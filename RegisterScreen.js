@@ -4,7 +4,7 @@ import {
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { db } from './firebase';
+import { db, storage } from './firebase';
 import {
   collection,
   addDoc,
@@ -12,7 +12,9 @@ import {
   query,
   where
 } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { Ionicons } from '@expo/vector-icons';
+import * as Crypto from 'expo-crypto';
 
 const { width, height } = Dimensions.get('window');
 
@@ -45,20 +47,20 @@ const VerificationModal = memo(({
           </View>
           <Text style={styles.modalTitle}>Barangay Verification</Text>
           <Text style={styles.modalSubtitle}>
-            To complete your registration, please name one current barangay official serving in Barangay Sambag 2.
+            To complete your registration, please name one current barangay or SK official serving in Barangay Sambag 2. You can use their full name or nickname.
           </Text>
         </View>
         
         <View style={styles.inputContainer}>
           <Text style={styles.label}>
-            Official's Name
+            Official's Name or Nickname
             <Text style={styles.required}> *</Text>
           </Text>
           <View style={styles.inputWrapper}>
             <Ionicons name="person-outline" size={20} color="#6B7280" style={styles.inputIcon} />
             <TextInput
               style={styles.input}
-              placeholder="Enter any barangay official's name"
+              placeholder="Enter any official's name or nickname"
               value={localOfficialName}
               onChangeText={setLocalOfficialName}
               placeholderTextColor="#9CA3AF"
@@ -102,8 +104,13 @@ export default function RegisterScreen({ onRegistered }) {
   const [contact, setContact] = useState('');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [idImage, setIdImage] = useState(null);
   const [loading, setLoading] = useState(false);
+  
+  // Password visibility states
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   
   // States for barangay officials verification
   const [showVerification, setShowVerification] = useState(false);
@@ -113,6 +120,9 @@ export default function RegisterScreen({ onRegistered }) {
   // States for username validation
   const [usernameError, setUsernameError] = useState('');
   const [checkingUsername, setCheckingUsername] = useState(false);
+
+  // Password confirmation error
+  const [passwordError, setPasswordError] = useState('');
 
   const pickImage = async (fromCamera = false) => {
     const permission = fromCamera
@@ -175,38 +185,129 @@ export default function RegisterScreen({ onRegistered }) {
     }
   }, [username, mode, checkUsernameAvailability]);
 
+  // Password confirmation validation
+  useEffect(() => {
+    if (mode === 'register' && confirmPassword && password !== confirmPassword) {
+      setPasswordError('Passwords do not match');
+    } else {
+      setPasswordError('');
+    }
+  }, [password, confirmPassword, mode]);
+
+  // Hash password function
+  const hashPassword = async (plainPassword) => {
+    try {
+      const digest = await Crypto.digestStringAsync(
+        Crypto.CryptoDigestAlgorithm.SHA256,
+        plainPassword,
+        { encoding: Crypto.CryptoEncoding.HEX }
+      );
+      return digest;
+    } catch (error) {
+      console.error('Error hashing password:', error);
+      throw new Error('Failed to hash password');
+    }
+  };
+
+  // Upload image to Firebase Storage
+  const uploadImageToStorage = async (imageUri) => {
+    if (!imageUri) return null;
+    
+    try {
+      // Convert URI to blob
+      const response = await fetch(imageUri);
+      const blob = await response.blob();
+      
+      // Create a unique filename
+      const filename = `id_${Date.now()}_${Math.random().toString(36).substr(2, 9)}.jpg`;
+      const storageRef = ref(storage, `user_ids/${filename}`);
+      
+      // Upload the blob
+      const snapshot = await uploadBytes(storageRef, blob);
+      
+      // Get the download URL
+      const downloadURL = await getDownloadURL(snapshot.ref);
+      return downloadURL;
+    } catch (error) {
+      console.error('Error uploading image:', error);
+      throw new Error('Failed to upload image');
+    }
+  };
+
   const verifyBarangayOfficial = useCallback(async (officialName) => {
     if (!officialName.trim()) {
-      Alert.alert('Missing Name', 'Please enter a barangay official name.');
+      Alert.alert('Missing Name', 'Please enter a barangay official name or nickname.');
       return;
     }
 
     setVerificationLoading(true);
     try {
-      // Get all barangay officials
-      const officialsRef = collection(db, 'brgyofficials');
-      const snapshot = await getDocs(officialsRef);
+      // Get barangay officials
+      const barangayOfficialsRef = collection(db, 'barangay_officials');
+      const barangaySnapshot = await getDocs(barangayOfficialsRef);
+      
+      // Get SK officials
+      const skOfficialsRef = collection(db, 'sk_officials');
+      const skSnapshot = await getDocs(skOfficialsRef);
       
       let isValidOfficial = false;
       const inputWords = officialName.toLowerCase().trim().split(/\s+/);
       
-      snapshot.forEach((doc) => {
-        const official = doc.data();
-        if (official.name) {
-          const officialWords = official.name.toLowerCase().split(/\s+/);
+      // Helper function to check if input matches official data
+      const checkOfficialMatch = (official) => {
+        if (!official.name) return false;
+        
+        // Check against official name
+        const officialWords = official.name.toLowerCase().split(/\s+/);
+        const nameMatch = inputWords.some(inputWord => 
+          officialWords.some(officialWord => 
+            inputWord === officialWord && inputWord.length >= 2 // Allow 2+ character matches
+          )
+        );
+        
+        if (nameMatch) return true;
+        
+        // Check against nicknames if they exist
+        if (official.nicknames && Array.isArray(official.nicknames)) {
+          const nicknameMatch = official.nicknames.some(nickname => {
+            const nicknameWords = nickname.toLowerCase().split(/\s+/);
+            return inputWords.some(inputWord =>
+              nicknameWords.some(nicknameWord =>
+                inputWord === nicknameWord && inputWord.length >= 2 // Allow 2+ character matches
+              )
+            );
+          });
           
-          // Check if any input word matches any word in the official's name
-          const hasMatch = inputWords.some(inputWord => 
-            officialWords.some(officialWord => 
-              inputWord === officialWord && inputWord.length > 2 // Avoid matching very short words
-            )
+          if (nicknameMatch) return true;
+          
+          // Also check for exact nickname matches (case-insensitive)
+          const exactNicknameMatch = official.nicknames.some(nickname =>
+            nickname.toLowerCase() === officialName.toLowerCase().trim()
           );
           
-          if (hasMatch) {
-            isValidOfficial = true;
-          }
+          if (exactNicknameMatch) return true;
+        }
+        
+        return false;
+      };
+      
+      // Check barangay officials
+      barangaySnapshot.forEach((doc) => {
+        const official = doc.data();
+        if (checkOfficialMatch(official)) {
+          isValidOfficial = true;
         }
       });
+      
+      // Check SK officials if not found in barangay officials
+      if (!isValidOfficial) {
+        skSnapshot.forEach((doc) => {
+          const official = doc.data();
+          if (checkOfficialMatch(official)) {
+            isValidOfficial = true;
+          }
+        });
+      }
 
       if (isValidOfficial) {
         setVerificationPassed(true);
@@ -215,7 +316,7 @@ export default function RegisterScreen({ onRegistered }) {
       } else {
         Alert.alert(
           'Verification Failed', 
-          'The name you entered does not match any current barangay official. Please try again.'
+          'The name or nickname you entered does not match any current barangay or SK official. Please try again with a different name or nickname.'
         );
       }
     } catch (err) {
@@ -226,7 +327,7 @@ export default function RegisterScreen({ onRegistered }) {
   }, []);
 
   const startRegistration = () => {
-    if (!firstName || !lastName || !contact || !username || !password || !idImage) {
+    if (!firstName || !lastName || !contact || !username || !password || !confirmPassword || !idImage) {
       Alert.alert('Missing Info', 'Please fill out all fields and upload your ID.');
       return;
     }
@@ -238,6 +339,16 @@ export default function RegisterScreen({ onRegistered }) {
 
     if (usernameError) {
       Alert.alert('Username Error', usernameError);
+      return;
+    }
+
+    if (passwordError) {
+      Alert.alert('Password Error', passwordError);
+      return;
+    }
+
+    if (password.length < 6) {
+      Alert.alert('Weak Password', 'Password must be at least 6 characters long.');
       return;
     }
 
@@ -260,19 +371,43 @@ export default function RegisterScreen({ onRegistered }) {
         return;
       }
 
+      // Upload ID image to Firebase Storage
+      let idImageUrl = null;
+      if (idImage) {
+        try {
+          idImageUrl = await uploadImageToStorage(idImage);
+        } catch (error) {
+          Alert.alert('Upload Error', 'Failed to upload ID image. Please try again.');
+          setLoading(false);
+          return;
+        }
+      }
+
+      // Hash the password before storing
+      const hashedPassword = await hashPassword(password);
+
       // Combine first and last name
       const name = `${firstName.trim()} ${lastName.trim()}`;
-      const newUser = { name, contact, username: username.trim(), password, idImage };
+      const newUser = { 
+        name, 
+        contact, 
+        username: username.trim(), 
+        password: hashedPassword,  // Store hashed password
+        idImage: idImageUrl  // Store Firebase Storage URL
+      };
       await addDoc(collection(db, 'users'), newUser);
 
       await AsyncStorage.setItem('user_registered', 'true');
-      await AsyncStorage.setItem('user_data', JSON.stringify(newUser));
+      await AsyncStorage.setItem('user_data', JSON.stringify({
+        ...newUser,
+        password: password  // Store original password in local storage for convenience
+      }));
 
-      Alert.alert('Success', 'Registration complete!');
+      Alert.alert('Success', 'Registration complete! Your ID has been securely uploaded.');
       onRegistered?.();
     } catch (err) {
       console.error(err);
-      Alert.alert('Error', 'Failed to register. Try again.');
+      Alert.alert('Error', 'Failed to register. Please try again.');
     }
     setLoading(false);
   };
@@ -285,8 +420,11 @@ export default function RegisterScreen({ onRegistered }) {
 
     setLoading(true);
     try {
+      // Hash the entered password for comparison
+      const hashedPassword = await hashPassword(password);
+      
       const usersRef = collection(db, 'users');
-      const q = query(usersRef, where('username', '==', username), where('password', '==', password));
+      const q = query(usersRef, where('username', '==', username), where('password', '==', hashedPassword));
       const snapshot = await getDocs(q);
 
       if (!snapshot.empty) {
@@ -294,7 +432,10 @@ export default function RegisterScreen({ onRegistered }) {
         const user = userDoc.data();
 
         await AsyncStorage.setItem('user_registered', 'true');
-        await AsyncStorage.setItem('user_data', JSON.stringify(user));
+        await AsyncStorage.setItem('user_data', JSON.stringify({
+          ...user,
+          password: password  // Store original password in local storage
+        }));
 
         Alert.alert('Welcome back!', `Hello ${user.name}`);
         onRegistered?.();
@@ -446,7 +587,7 @@ export default function RegisterScreen({ onRegistered }) {
               <Text style={styles.required}> *</Text>
             </Text>
             <View style={[styles.inputWrapper, usernameError && styles.inputWrapperError]}>
-              <Ionicons name="at-outline" size={20} color="#6B7280" style={styles.inputIcon} />
+              <Ionicons name="person-circle-outline" size={20} color="#6B7280" style={styles.inputIcon} />
               <TextInput
                 style={styles.input}
                 placeholder="Enter your username"
@@ -479,11 +620,62 @@ export default function RegisterScreen({ onRegistered }) {
                 placeholder="Enter your password"
                 value={password}
                 onChangeText={setPassword}
-                secureTextEntry
+                secureTextEntry={!showPassword}
                 placeholderTextColor="#9CA3AF"
               />
+              <TouchableOpacity
+                onPress={() => setShowPassword(!showPassword)}
+                style={styles.eyeButton}
+              >
+                <Ionicons 
+                  name={showPassword ? "eye-outline" : "eye-off-outline"} 
+                  size={20} 
+                  color="#6B7280" 
+                />
+              </TouchableOpacity>
             </View>
+            {mode === 'register' && password.length > 0 && password.length < 6 && (
+              <Text style={styles.validationText}>
+                Password must be at least 6 characters long
+              </Text>
+            )}
           </View>
+
+          {mode === 'register' && (
+            <View style={styles.inputContainer}>
+              <Text style={styles.label}>
+                Confirm Password
+                <Text style={styles.required}> *</Text>
+              </Text>
+              <View style={[styles.inputWrapper, passwordError && styles.inputWrapperError]}>
+                <Ionicons name="lock-closed-outline" size={20} color="#6B7280" style={styles.inputIcon} />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Confirm your password"
+                  value={confirmPassword}
+                  onChangeText={setConfirmPassword}
+                  secureTextEntry={!showConfirmPassword}
+                  placeholderTextColor="#9CA3AF"
+                />
+                <TouchableOpacity
+                  onPress={() => setShowConfirmPassword(!showConfirmPassword)}
+                  style={styles.eyeButton}
+                >
+                  <Ionicons 
+                    name={showConfirmPassword ? "eye-outline" : "eye-off-outline"} 
+                    size={20} 
+                    color="#6B7280" 
+                  />
+                </TouchableOpacity>
+              </View>
+              {passwordError && (
+                <Text style={styles.errorText}>{passwordError}</Text>
+              )}
+              {!passwordError && confirmPassword && password === confirmPassword && (
+                <Text style={styles.successText}>Passwords match!</Text>
+              )}
+            </View>
+          )}
 
           {mode === 'register' && (
             <View style={styles.inputContainer}>
@@ -728,6 +920,15 @@ const styles = StyleSheet.create({
   },
   loadingIcon: {
     marginLeft: 8,
+  },
+  eyeButton: {
+    padding: 4,
+  },
+  successText: {
+    fontSize: 12,
+    color: '#10B981',
+    marginTop: 4,
+    fontWeight: '500',
   },
   validationText: {
     fontSize: 12,

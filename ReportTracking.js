@@ -95,6 +95,17 @@ export default function ReportTracking({ visible, onClose, userId, userName }) {
     };
   }, [visible]);
 
+  // Add this NEW useEffect after the existing one
+useEffect(() => {
+  if (selectedReport && showReportDetails) {
+    // Find the updated version of this report from the reports array
+    const updatedReport = reports.find(report => report.id === selectedReport.id);
+    if (updatedReport) {
+      setSelectedReport(updatedReport);
+    }
+  }
+}, [reports, showReportDetails]);
+
   const getDeviceId = async () => {
     try {
       const stored = await AsyncStorage.getItem('deviceId');
@@ -111,56 +122,65 @@ export default function ReportTracking({ visible, onClose, userId, userName }) {
     setupRealtimeListeners();
   };
 
-  // Fixed date parsing to handle the format "9/11/2025, 2:01:25 AM"
-  const parseDate = (dateString) => {
-    if (!dateString) return new Date(0);
-    
-    // Handle different timestamp formats
-    if (typeof dateString === 'string') {
-      // Handle the specific format "9/11/2025, 2:01:25 AM"
-      if (dateString.includes('/') && dateString.includes(',')) {
-        const date = new Date(dateString);
-        if (!isNaN(date.getTime())) {
-          return date;
-        }
-      }
-      
-      // Try parsing as ISO string
-      let date = new Date(dateString);
-      if (!isNaN(date.getTime())) {
-        return date;
-      }
-      
-      // Try parsing as timestamp number
-      const timestamp = parseInt(dateString);
-      if (!isNaN(timestamp)) {
-        return new Date(timestamp);
-      }
-    } else if (typeof dateString === 'number') {
-      return new Date(dateString);
-    }
-    
-    return new Date(0);
-  };
+ const parseDate = (dateString) => {
+  if (!dateString) return new Date(0);
+  return new Date(dateString);
+};
 
-  const formatDateTime = (dateString) => {
-    if (!dateString) return "N/A";
-    
-    const date = parseDate(dateString);
-    
-    if (date.getTime() === 0) {
-      return "N/A";
+const formatDateTime = (dateString) => {
+  if (!dateString) return "N/A";
+  
+  // Handle ISO format with Z like "2025-09-18T19:35:13.886Z"
+  if (typeof dateString === 'string' && dateString.includes('T') && dateString.includes('Z')) {
+    const date = new Date(dateString);
+    if (!isNaN(date.getTime())) {
+      return date.toLocaleString("en-US", {
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+        hour12: true,
+      });
     }
-    
-    return date.toLocaleString("en-US", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-      hour: "numeric",
-      minute: "2-digit",
-      hour12: true,
-    });
-  };
+  }
+  
+  // Handle datetime-local format like "2025-09-19T04:12"
+  if (typeof dateString === 'string' && dateString.includes('T') && !dateString.includes('Z')) {
+    const date = new Date(dateString);
+    if (!isNaN(date.getTime())) {
+      return date.toLocaleString("en-US", {
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+        hour12: true,
+      });
+    }
+  }
+  
+  // Handle Firebase format like "9/19/2025, 3:23:41 AM"
+  const parts = dateString.split(', ');
+  if (parts.length !== 2) return dateString;
+  
+  const datePart = parts[0]; // "9/19/2025"
+  const timePart = parts[1]; // "3:23:41 AM"
+  
+  const dateComponents = datePart.split('/');
+  if (dateComponents.length !== 3) return dateString;
+  
+  const month = parseInt(dateComponents[0]);
+  const day = parseInt(dateComponents[1]);
+  const year = dateComponents[2];
+  
+  const months = [
+    '', 'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'
+  ];
+  
+  return `${months[month]} ${day}, ${year}, ${timePart}`;
+};
 
   const loadUserReports = async () => {
     try {

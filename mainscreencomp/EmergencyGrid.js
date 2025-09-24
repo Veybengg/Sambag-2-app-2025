@@ -1,8 +1,10 @@
-// components/EmergencyGrid.js - FIXED HEIGHT GRID WITH "I DON'T NEED HELP" BUTTON
-import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Dimensions, ScrollView } from 'react-native';
+// components/EmergencyGrid.js - FIXED HEIGHT GRID WITH "I DON'T NEED HELP" AND "DISTRESS CALL" BUTTONS
+import React, { useState, useEffect } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, Dimensions, ScrollView, Linking, Alert } from 'react-native';
 import { FontAwesome5 } from '@expo/vector-icons';
 import { useVideoPlayer, VideoView } from 'expo-video';
+import { doc, onSnapshot } from 'firebase/firestore';
+import { db } from '../firebase'; // Adjust the path to your Firebase config
 
 const { width, height } = Dimensions.get('window');
 
@@ -18,9 +20,10 @@ const CLEAN_COLORS = {
   cardBorder: '#CBD5E0',
   accent: '#667eea',
   secondary: '#38B2AC',
+  emergency: '#DC2626', // Red color for emergency button
 };
 
-function AlarmButton({ onPress, onSwitchToAnnouncements }) {
+function AlarmButton({ onPress, onSwitchToAnnouncements, onDistressCall }) {
   const videoSource = require('../assets/alarm.mp4');
 
   const player = useVideoPlayer(videoSource, (player) => {
@@ -41,20 +44,108 @@ function AlarmButton({ onPress, onSwitchToAnnouncements }) {
         <VideoView player={player} style={styles.alarmVideo} nativeControls={false} />
       </TouchableOpacity>
 
-      {/* NEW: "I don't need help" button */}
-      <TouchableOpacity 
-        style={styles.noHelpButton} 
-        onPress={onSwitchToAnnouncements}
-        activeOpacity={0.8}
-      >
-        <Text style={styles.noHelpText}>I don't need help</Text>
-      </TouchableOpacity>
+      {/* Button container for both buttons */}
+      <View style={styles.buttonContainer}>
+        {/* Distress Call Button */}
+        <TouchableOpacity 
+          style={styles.distressButton} 
+          onPress={onDistressCall}
+          activeOpacity={0.8}
+        >
+          <FontAwesome5 name="phone" size={16} color={CLEAN_COLORS.white} style={styles.buttonIcon} />
+          <Text style={styles.distressText}>Distress Call</Text>
+        </TouchableOpacity>
+
+        {/* "I don't need help" button */}
+        <TouchableOpacity 
+          style={styles.noHelpButton} 
+          onPress={onSwitchToAnnouncements}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.noHelpText}>I don't need help</Text>
+        </TouchableOpacity>
+      </View>
     </View>
   );
 }
 
 export default function EmergencyGrid({ buttons, onButtonPress, onSwitchToAnnouncements }) {
   const [showGrid, setShowGrid] = useState(false);
+  const [hotlineNumber, setHotlineNumber] = useState('');
+
+  // Fetch hotline number from Firebase
+  useEffect(() => {
+    const unsubscribe = onSnapshot(doc(db, "homepage_cms", "contact_info"), (doc) => {
+      if (doc.exists()) {
+        const data = doc.data();
+        setHotlineNumber(data.hotline || '');
+      }
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  // Handle distress call
+  const handleDistressCall = async () => {
+    if (!hotlineNumber) {
+      Alert.alert(
+        "No Hotline Available",
+        "Emergency hotline number is not configured. Please contact your barangay office.",
+        [{ text: "OK", style: "default" }]
+      );
+      return;
+    }
+
+    // Clean the phone number (remove spaces, dashes, etc.)
+    const cleanedNumber = hotlineNumber.replace(/[^\d+]/g, '');
+    const phoneUrl = `tel:${cleanedNumber}`;
+
+    try {
+      const supported = await Linking.canOpenURL(phoneUrl);
+      if (supported) {
+        Alert.alert(
+          "Emergency Call",
+          `Call emergency hotline: ${hotlineNumber}?`,
+          [
+            { 
+              text: "Cancel", 
+              style: "cancel" 
+            },
+            { 
+              text: "Call Now", 
+              style: "destructive",
+              onPress: () => Linking.openURL(phoneUrl)
+            }
+          ]
+        );
+      } else {
+        // For testing purposes - show what would happen
+        Alert.alert(
+          "Testing Mode",
+          `In production, this would call: ${hotlineNumber}\n\nPhone URL: ${phoneUrl}\n\nNote: Phone calling may not work in Expo Go environment.`,
+          [
+            { text: "OK", style: "default" },
+            { 
+              text: "Test URL", 
+              style: "default",
+              onPress: () => {
+                console.log('Would call:', phoneUrl);
+                // You can also copy to clipboard for testing
+                // Clipboard.setString(phoneUrl);
+              }
+            }
+          ]
+        );
+      }
+    } catch (error) {
+      console.error('Error making distress call:', error);
+      Alert.alert(
+        "Call Error (Testing)",
+        `Unable to initiate call in this environment.\n\nWould call: ${hotlineNumber}\nClean number: ${cleanedNumber}\nURL: ${phoneUrl}`,
+        [{ text: "OK", style: "default" }]
+      );
+    }
+  };
 
   // Create pairs of buttons for rows
   const buttonPairs = [];
@@ -67,7 +158,8 @@ export default function EmergencyGrid({ buttons, onButtonPress, onSwitchToAnnoun
       <View style={[styles.initialScreen, { display: showGrid ? 'none' : 'flex' }]}>
         <AlarmButton 
           onPress={() => setShowGrid(true)} 
-          onSwitchToAnnouncements={onSwitchToAnnouncements} 
+          onSwitchToAnnouncements={onSwitchToAnnouncements}
+          onDistressCall={handleDistressCall}
         />
       </View>
 
@@ -146,9 +238,9 @@ export default function EmergencyGrid({ buttons, onButtonPress, onSwitchToAnnoun
 }
 
 const styles = StyleSheet.create({
-  // NEW: Set a specific height for the entire component
+  // Set a specific height for the entire component
   container: {
-    height: height * 0.82, // Takes 70% of screen height
+    height: height * 0.82, // Takes 82% of screen height
     width: '100%',
   },
   
@@ -173,7 +265,7 @@ const styles = StyleSheet.create({
   alarmWrapper: {
     borderRadius: 200,
     overflow: 'hidden',
-    marginBottom: 30, // Add spacing between alarm button and "I don't need help" button
+    marginBottom: 30, // Add spacing between alarm button and action buttons
   },
   alarmVideo: {
     width: 280,
@@ -181,7 +273,40 @@ const styles = StyleSheet.create({
     borderRadius: 200,
   },
 
-  // NEW: Styles for "I don't need help" button
+  // NEW: Container for both buttons
+  buttonContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 15, // Space between buttons
+    flexWrap: 'wrap', // Allow wrapping on smaller screens
+  },
+
+  // NEW: Distress Call button styles
+  distressButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: CLEAN_COLORS.emergency,
+    paddingHorizontal: 24,
+    paddingVertical: 14,
+    borderRadius: 25,
+    shadowColor: CLEAN_COLORS.emergency,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
+    minWidth: 140, // Ensure consistent button sizing
+  },
+  buttonIcon: {
+    marginRight: 8,
+  },
+  distressText: {
+    color: CLEAN_COLORS.white,
+    fontSize: 16,
+    fontWeight: '600',
+  },
+
+  // Updated: "I don't need help" button styles
   noHelpButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -194,9 +319,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 6,
-  },
-  noHelpIcon: {
-    marginRight: 8,
+    minWidth: 140, // Ensure consistent button sizing
   },
   noHelpText: {
     color: CLEAN_COLORS.white,
@@ -240,7 +363,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   
-  // NEW: Add content container style for better scrolling
+  // Add content container style for better scrolling
   scrollContent: {
     paddingBottom: 20, // Extra padding at bottom
   },
