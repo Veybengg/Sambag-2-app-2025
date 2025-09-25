@@ -119,29 +119,17 @@ export default function EmergencyGrid({ buttons, onButtonPress, onSwitchToAnnoun
           ]
         );
       } else {
-        // For testing purposes - show what would happen
         Alert.alert(
-          "Testing Mode",
-          `In production, this would call: ${hotlineNumber}\n\nPhone URL: ${phoneUrl}\n\nNote: Phone calling may not work in Expo Go environment.`,
-          [
-            { text: "OK", style: "default" },
-            { 
-              text: "Test URL", 
-              style: "default",
-              onPress: () => {
-                console.log('Would call:', phoneUrl);
-                // You can also copy to clipboard for testing
-                // Clipboard.setString(phoneUrl);
-              }
-            }
-          ]
+          "Cannot Make Call",
+          "Your device doesn't support phone calls or the number format is invalid.",
+          [{ text: "OK", style: "default" }]
         );
       }
     } catch (error) {
       console.error('Error making distress call:', error);
       Alert.alert(
-        "Call Error (Testing)",
-        `Unable to initiate call in this environment.\n\nWould call: ${hotlineNumber}\nClean number: ${cleanedNumber}\nURL: ${phoneUrl}`,
+        "Call Error",
+        "Unable to initiate call. Please dial the emergency number manually.",
         [{ text: "OK", style: "default" }]
       );
     }
