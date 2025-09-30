@@ -12,10 +12,9 @@ import {
   StyleSheet,
   Animated,
   TextInput,
-  KeyboardAvoidingView,
   Platform
 } from 'react-native';
-import { Calendar } from 'react-native-calendars';
+import CalendarPicker from 'react-native-calendar-picker';
 import { FontAwesome5 } from '@expo/vector-icons';
 import { db } from './firebase';
 import { collection, query, orderBy, onSnapshot, doc, updateDoc, arrayUnion, arrayRemove, increment } from 'firebase/firestore';
@@ -43,6 +42,7 @@ const COLORS = {
   gradient: ['#667eea', '#764ba2'],
 };
 
+
 export default function Announcements({ onBack }) {
   const [activeTab, setActiveTab] = useState('Feed');
   
@@ -63,15 +63,20 @@ export default function Announcements({ onBack }) {
   const [selectedDateEvents, setSelectedDateEvents] = useState([]);
   const [commentsModalVisible, setCommentsModalVisible] = useState(false);
   const [selectedPostId, setSelectedPostId] = useState(null);
-  const [selectedPostData, setSelectedPostData] = useState(null); // Store the actual post data
+  const [selectedPostData, setSelectedPostData] = useState(null);
+  
+  // NEW: Sponsor modal states
+  const [sponsorModalVisible, setSponsorModalVisible] = useState(false);
+  const [selectedEventSponsors, setSelectedEventSponsors] = useState([]);
+  const [selectedEventDetails, setSelectedEventDetails] = useState(null);
 
   // Comment state
   const [commentText, setCommentText] = useState('');
   const [currentUser, setCurrentUser] = useState(null);
+  const [submittingComment, setSubmittingComment] = useState(false);
+  const [commentSuccess, setCommentSuccess] = useState(false);
   const selectedPost = posts.find(p => p.id === selectedPostId);
 
-  
-  
   // Likes state (track which posts current user liked)
   const [userLikes, setUserLikes] = useState(new Set());
 
@@ -83,19 +88,43 @@ export default function Announcements({ onBack }) {
     loadCurrentUser();
   }, []);
 
+  const getCustomDateStyles = () => {
+    const customStyles = [];
+    
+    events.forEach(event => {
+      if (event.date) {
+        const eventDate = new Date(event.date + 'T00:00:00');
+        customStyles.push({
+          date: eventDate,
+          style: {
+            backgroundColor: COLORS.primary,
+            borderRadius: 15,
+          },
+          textStyle: {
+            color: COLORS.white,
+            fontWeight: '600',
+          },
+          containerStyle: [],
+          allowDisabled: true,
+        });
+      }
+    });
+    
+    return customStyles;
+  };
+
   useEffect(() => {
-  if (!selectedPostData?.id || !selectedPostData?.source) return;
+    if (!selectedPostData?.id || !selectedPostData?.source) return;
 
-  const postRef = doc(db, selectedPostData.source, selectedPostData.id);
-  const unsubscribe = onSnapshot(postRef, (docSnap) => {
-    if (docSnap.exists()) {
-      setSelectedPostData({ id: docSnap.id, source: selectedPostData.source, ...docSnap.data() });
-    }
-  });
+    const postRef = doc(db, selectedPostData.source, selectedPostData.id);
+    const unsubscribe = onSnapshot(postRef, (docSnap) => {
+      if (docSnap.exists()) {
+        setSelectedPostData({ id: docSnap.id, source: selectedPostData.source, ...docSnap.data() });
+      }
+    });
 
-  return () => unsubscribe();
-}, [selectedPostData?.id, selectedPostData?.source]);
-
+    return () => unsubscribe();
+  }, [selectedPostData?.id, selectedPostData?.source]);
 
   const loadCurrentUser = async () => {
     try {
@@ -108,7 +137,6 @@ export default function Announcements({ onBack }) {
           avatar: user.imageUrl || null
         });
         
-        // Load user's liked posts using name as key
         const likedPosts = await AsyncStorage.getItem(`user_likes_${user.name}`);
         if (likedPosts) {
           setUserLikes(new Set(JSON.parse(likedPosts)));
@@ -119,7 +147,6 @@ export default function Announcements({ onBack }) {
     }
   };
 
-  // Save user likes to storage
   const saveUserLikes = async (likes) => {
     try {
       if (currentUser && currentUser.name) {
@@ -162,7 +189,7 @@ export default function Announcements({ onBack }) {
         comments: doc.data().comments || [],
         commentsCount: doc.data().commentsCount || 0,
       }));
-      setFeaturedPosts(fetchedAnnouncements.slice(0, 5)); // Show first 5 as featured
+      setFeaturedPosts(fetchedAnnouncements.slice(0, 5));
       setLoadingFeatured(false);
     });
     return () => unsubscribe();
@@ -176,7 +203,6 @@ export default function Announcements({ onBack }) {
         id: doc.id, 
         ...doc.data() 
       }));
-      // Filter out archived events
       const activeEvents = fetchedEvents.filter(event => !event.archived);
       setEvents(activeEvents);
 
@@ -197,76 +223,124 @@ export default function Announcements({ onBack }) {
     return () => unsubscribe();
   }, []);
 
-  // Handle like functionality for newsfeeds
- const handleLike = async (postId, source) => {
-  if (!currentUser) return;
+  const handleLike = async (postId, source) => {
+    if (!currentUser) return;
 
-  try {
-    const postRef = doc(db, source, postId); // 👈 dynamic
-    const isLiked = userLikes.has(postId);
-    const newUserLikes = new Set(userLikes);
+    try {
+      const postRef = doc(db, source, postId);
+      const isLiked = userLikes.has(postId);
+      const newUserLikes = new Set(userLikes);
 
-    if (isLiked) {
-      newUserLikes.delete(postId);
-      await updateDoc(postRef, {
-        likes: arrayRemove(currentUser.id),
-        likesCount: increment(-1),
-      });
-    } else {
-      newUserLikes.add(postId);
-      await updateDoc(postRef, {
-        likes: arrayUnion(currentUser.id),
-        likesCount: increment(1),
-      });
+      if (isLiked) {
+        newUserLikes.delete(postId);
+        await updateDoc(postRef, {
+          likes: arrayRemove(currentUser.id),
+          likesCount: increment(-1),
+        });
+      } else {
+        newUserLikes.add(postId);
+        await updateDoc(postRef, {
+          likes: arrayUnion(currentUser.id),
+          likesCount: increment(1),
+        });
+      }
+
+      setUserLikes(newUserLikes);
+      saveUserLikes(newUserLikes);
+    } catch (error) {
+      console.error('Error updating like:', error);
     }
-
-    setUserLikes(newUserLikes);
-    saveUserLikes(newUserLikes);
-  } catch (error) {
-    console.error('Error updating like:', error);
-  }
-};
-
-  // Handle comment submission
-  const handleComment = async () => {
-  if (!currentUser || !selectedPostData || !commentText.trim()) return;
-
-  try {
-    const postRef = doc(db, selectedPostData.source, selectedPostData.id); // 👈 dynamic
-    const newComment = {
-      id: Date.now().toString(),
-      userId: currentUser.id,
-      userName: currentUser.name,
-      userAvatar: currentUser.avatar,
-      text: commentText.trim(),
-      timestamp: new Date().toISOString(),
-    };
-
-    await updateDoc(postRef, {
-      comments: arrayUnion(newComment),
-      commentsCount: increment(1),
-    });
-
-    setCommentText('');
-  } catch (error) {
-    console.error('Error adding comment:', error);
-  }
-};
-
-  // Open comments modal - FIXED
-  const openComments = (post) => {
-    setSelectedPostId(post.id);
-    setSelectedPostData(post);
-    setCommentsModalVisible(true);
   };
 
-  // Compute upcoming events
+  const handleComment = async () => {
+    if (!currentUser || !selectedPostData || !commentText.trim() || submittingComment) return;
+
+    setSubmittingComment(true);
+    setCommentSuccess(false);
+
+    try {
+      const postRef = doc(db, selectedPostData.source, selectedPostData.id);
+      const newComment = {
+        id: Date.now().toString(),
+        userId: currentUser.id,
+        userName: currentUser.name,
+        userAvatar: currentUser.avatar,
+        text: commentText.trim(),
+        timestamp: new Date().toISOString(),
+      };
+
+      await updateDoc(postRef, {
+        comments: arrayUnion(newComment),
+        commentsCount: increment(1),
+      });
+
+      setCommentText('');
+      setCommentSuccess(true);
+      
+      setTimeout(() => {
+        setCommentSuccess(false);
+      }, 2000);
+
+    } catch (error) {
+      console.error('Error adding comment:', error);
+    } finally {
+      setSubmittingComment(false);
+    }
+  };
+
+  const manualTimeFormat = (timeString) => {
+    if (!timeString) return '';
+    
+    let hour = '';
+    let minute = '';
+    let foundColon = false;
+    
+    for (let i = 0; i < timeString.length; i++) {
+      const char = timeString[i];
+      if (char === ':') {
+        foundColon = true;
+      } else if (!foundColon) {
+        hour += char;
+      } else {
+        minute += char;
+      }
+    }
+    
+    const hourNum = Number(hour);
+    const minuteStr = minute.length === 1 ? '0' + minute : minute;
+    
+    let displayHour;
+    let period;
+    
+    if (hourNum === 0) {
+      displayHour = 12;
+      period = 'AM';
+    } else if (hourNum < 12) {
+      displayHour = hourNum;
+      period = 'AM';
+    } else if (hourNum === 12) {
+      displayHour = 12;
+      period = 'PM';
+    } else {
+      displayHour = hourNum - 12;
+      period = 'PM';
+    }
+    
+    return displayHour + ':' + minuteStr + ' ' + period;
+  };
+
   const upcomingEvents = events
     .filter(ev => new Date(ev.date) >= new Date())
     .sort((a, b) => new Date(a.date) - new Date(b.date))
     .slice(0, 3);
 
-  // Carousel Item Renderer for System Announcements
+  // NEW: Function to open event detail modal
+  const openEventDetailModal = (event) => {
+    setSelectedEventDetails(event);
+    setSelectedEventSponsors(event.sponsors || []);
+    setSponsorModalVisible(true);
+  };
+
   const renderCarouselItem = ({ item, index }) => {
     const inputRange = [
       (index - 1) * CAROUSEL_ITEM_WIDTH,
@@ -290,30 +364,43 @@ export default function Announcements({ onBack }) {
       <Animated.View style={[styles.carouselItem, { transform: [{ scale }], opacity }]}>
         <TouchableOpacity activeOpacity={0.9}>
           <View style={styles.carouselCard}>
-            <View style={styles.carouselPlaceholder}>
-              <FontAwesome5 name="bullhorn" size={40} color={COLORS.white} />
-            </View>
-            <View style={styles.carouselOverlay}>
+            {item.image ? (
+              <Image 
+                source={{ uri: item.image }} 
+                style={styles.carouselImage}
+                resizeMode="cover"
+              />
+            ) : (
+              <View style={styles.carouselPlaceholder}>
+                <FontAwesome5 name="bullhorn" size={40} color={COLORS.white} />
+              </View>
+            )}
+            <View style={styles.carouselInfoSection}>
               <View style={styles.carouselContent}>
                 <Text style={styles.carouselTitle} numberOfLines={2}>
                   {item.what || 'System Announcement'}
                 </Text>
                 <View style={styles.carouselDetails}>
                   <Text style={styles.carouselDetailText} numberOfLines={1}>
-                    <FontAwesome5 name="map-marker-alt" size={10} color={COLORS.white} /> {item.where}
+                    <FontAwesome5 name="map-marker-alt" size={10} color={COLORS.textSecondary} /> {item.where}
                   </Text>
                   <Text style={styles.carouselDetailText} numberOfLines={1}>
-                    <FontAwesome5 name="clock" size={10} color={COLORS.white} /> {item.when ? new Date(item.when).toLocaleDateString() : 'TBD'}
+                    <FontAwesome5 name="clock" size={10} color={COLORS.textSecondary} /> {item.when ? new Date(item.when).toLocaleDateString('en-US', {
+                      month: 'short',
+                      day: 'numeric',
+                      hour: 'numeric',
+                      minute: '2-digit',
+                      hour12: true
+                    }) : 'TBD'}
                   </Text>
                   <Text style={styles.carouselDetailText} numberOfLines={1}>
-                    <FontAwesome5 name="users" size={10} color={COLORS.white} /> {item.who}
+                    <FontAwesome5 name="users" size={10} color={COLORS.textSecondary} /> {item.who}
                   </Text>
                 </View>
                 <View style={styles.carouselMeta}>
                   <Text style={styles.carouselTime}>
                     {item.timestamp?.toDate ? item.timestamp.toDate().toLocaleDateString() : 'Recent'}
                   </Text>
-                 
                 </View>
               </View>
             </View>
@@ -323,14 +410,12 @@ export default function Announcements({ onBack }) {
     );
   };
 
-  // Regular post renderer for newsfeeds
   const renderPost = ({ item }) => {
     const isLiked = userLikes.has(item.id);
     const timeAgo = getTimeAgo(item.timestamp?.toDate ? item.timestamp.toDate() : new Date());
 
     return (
       <View style={styles.postCard}>
-        {/* Post Header */}
         <View style={styles.postHeader}>
           <View style={styles.postAuthor}>
             <View style={styles.postAvatar}>
@@ -346,20 +431,17 @@ export default function Announcements({ onBack }) {
           </View>
         </View>
 
-        {/* Post Content */}
         <View style={styles.postBody}>
           <Text style={styles.postTitle}>{item.title}</Text>
           <Text style={styles.postText}>{item.content}</Text>
         </View>
 
-        {/* Post Image */}
         {item.image && (
           <TouchableOpacity onPress={() => { setSelectedImage(item.image); setImageModalVisible(true); }}>
             <Image source={{ uri: item.image }} style={styles.postImage} />
           </TouchableOpacity>
         )}
 
-        {/* Post Stats */}
         {(item.likesCount > 0 || item.commentsCount > 0) && (
           <View style={styles.postStats}>
             <View style={styles.postStatsLeft}>
@@ -380,7 +462,6 @@ export default function Announcements({ onBack }) {
           </View>
         )}
 
-        {/* Post Actions */}
         <View style={styles.postActions}>
           <TouchableOpacity 
             style={[styles.actionButton, isLiked && styles.likedButton]}
@@ -406,7 +487,6 @@ export default function Announcements({ onBack }) {
           </TouchableOpacity>
         </View>
 
-        {/* Recent Comments Preview */}
         {item.comments && item.comments.length > 0 && (
           <View style={styles.commentsPreview}>
             {item.comments.slice(-2).map((comment, index) => (
@@ -435,7 +515,6 @@ export default function Announcements({ onBack }) {
     );
   };
 
-  // Helper function to get time ago
   const getTimeAgo = (date) => {
     const now = new Date();
     const diffInSeconds = Math.floor((now - date) / 1000);
@@ -444,10 +523,16 @@ export default function Announcements({ onBack }) {
     if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)}m`;
     if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)}h`;
     if (diffInSeconds < 2592000) return `${Math.floor(diffInSeconds / 86400)}d`;
-    return date.toLocaleDateString();
+    
+    return date.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true
+    });
   };
 
-  // Comment renderer for modal - FIXED
   const renderComment = ({ item: comment }) => (
     <View style={styles.commentItem}>
       <View style={styles.commentItemAvatar}>
@@ -465,7 +550,6 @@ export default function Announcements({ onBack }) {
     </View>
   );
 
-  // Handle calendar day press
   const handleDayPress = (day) => {
     const clickedDate = day.dateString;
     const eventsOnDate = events.filter(ev => ev.date === clickedDate);
@@ -473,8 +557,12 @@ export default function Announcements({ onBack }) {
     setEventModalVisible(true);
   };
 
+  // UPDATED: renderEvent - now clickable
   const renderEvent = ({ item }) => (
-    <View style={styles.eventItem}>
+    <TouchableOpacity 
+      onPress={() => openEventDetailModal(item)}
+      style={styles.eventItem}
+    >
       <View style={styles.eventIconContainer}>
         <FontAwesome5 name="calendar-day" size={18} color={COLORS.accent} />
       </View>
@@ -484,18 +572,29 @@ export default function Announcements({ onBack }) {
         <Text style={styles.eventDate}>
           {new Date(item.date).toLocaleDateString()}
         </Text>
-        {/* Added duration */}
         {item.fromTime && item.toTime && (
           <Text style={styles.eventDuration}>
-            {item.fromTime} - {item.toTime}
+            {manualTimeFormat(item.fromTime)} - {manualTimeFormat(item.toTime)}
           </Text>
         )}
+        {item.sponsors && item.sponsors.length > 0 && (
+          <View style={styles.sponsorBadge}>
+            <FontAwesome5 name="handshake" size={10} color={COLORS.primary} />
+            <Text style={styles.sponsorBadgeText}>
+              {item.sponsors.length} Sponsor{item.sponsors.length > 1 ? 's' : ''}
+            </Text>
+          </View>
+        )}
       </View>
-    </View>
+    </TouchableOpacity>
   );
 
+  // UPDATED: renderUpcomingEvent - now clickable
   const renderUpcomingEvent = ({ item }) => (
-    <View style={styles.upcomingEventCard}>
+    <TouchableOpacity 
+      onPress={() => openEventDetailModal(item)}
+      style={styles.upcomingEventCard}
+    >
       <View style={styles.eventDateBadge}>
         <Text style={styles.eventDateText}>
           {new Date(item.date).getDate()}
@@ -509,15 +608,28 @@ export default function Announcements({ onBack }) {
         <Text style={styles.upcomingEventDescription} numberOfLines={2}>
           {item.description}
         </Text>
-        {/* Added duration */}
         {item.fromTime && item.toTime && (
           <Text style={styles.upcomingEventTime}>
-            {item.fromTime} - {item.toTime}
+            {manualTimeFormat(item.fromTime)} - {manualTimeFormat(item.toTime)}
           </Text>
         )}
+        {item.sponsors && item.sponsors.length > 0 && (
+          <View style={styles.sponsorBadge}>
+            <FontAwesome5 name="handshake" size={10} color={COLORS.primary} />
+            <Text style={styles.sponsorBadgeText}>
+              {item.sponsors.length} Sponsor{item.sponsors.length > 1 ? 's' : ''}
+            </Text>
+          </View>
+        )}
       </View>
-    </View>
+    </TouchableOpacity>
   );
+
+  const openComments = (item) => {
+    setSelectedPostId(item.id);
+    setSelectedPostData(item);
+    setCommentsModalVisible(true);
+  };
 
   const TabButton = ({ title, isActive, onPress }) => (
     <TouchableOpacity
@@ -533,7 +645,6 @@ export default function Announcements({ onBack }) {
 
   return (
     <View style={styles.container}>
-      {/* Modern Tab Header */}
       <View style={styles.tabContainer}>
         <TabButton
           title="Feed"
@@ -547,7 +658,6 @@ export default function Announcements({ onBack }) {
         />
       </View>
 
-      {/* Tab Content */}
       <View style={styles.contentContainer}>
         {activeTab === 'Feed' ? (
           (loadingPosts || loadingFeatured) ? (
@@ -595,28 +705,25 @@ export default function Announcements({ onBack }) {
           </View>
         ) : (
           <ScrollView showsVerticalScrollIndicator={false}>
-            <Calendar
-              markedDates={markedDates}
-              onDayPress={handleDayPress}
-              theme={{
-                backgroundColor: COLORS.white,
-                calendarBackground: COLORS.white,
-                textSectionTitleColor: COLORS.text,
-                selectedDayBackgroundColor: COLORS.primary,
-                selectedDayTextColor: COLORS.white,
-                todayTextColor: COLORS.primary,
-                dayTextColor: COLORS.text,
-                textDisabledColor: COLORS.textLight,
-                dotColor: COLORS.primary,
-                selectedDotColor: COLORS.white,
-                arrowColor: COLORS.primary,
-                monthTextColor: COLORS.text,
-                indicatorColor: COLORS.primary,
-                textDayFontWeight: '500',
-                textMonthFontWeight: '600',
-                textDayHeaderFontWeight: '600',
+            <CalendarPicker
+              onDateChange={(date) => {
+                if (date) {
+                  const dateString = date.format('YYYY-MM-DD');
+                  const eventsOnDate = events.filter(ev => ev.date === dateString);
+                  setSelectedDateEvents(eventsOnDate);
+                  setEventModalVisible(true);
+                }
               }}
-              style={styles.calendar}
+              selectedDayColor={COLORS.primary}
+              selectedDayTextColor={COLORS.white}
+              todayBackgroundColor={`${COLORS.primary}20`}
+              todayTextStyle={{ color: COLORS.primary }}
+              textStyle={{ color: COLORS.text }}
+              width={screenWidth - 40}
+              height={320}
+              scaleFactor={375}
+              customDatesStyles={getCustomDateStyles()}
+              dayLabelsWrapper={{ borderTopWidth: 0, borderBottomWidth: 0 }}
             />
 
             {upcomingEvents.length > 0 && (
@@ -633,62 +740,82 @@ export default function Announcements({ onBack }) {
         )}
       </View>
 
-      {/* Comments Modal - FIXED with input always visible */}
-<Modal visible={commentsModalVisible} transparent={true} animationType="slide">
-  <KeyboardAvoidingView 
-    behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    style={styles.commentsModalContainer}
-  >
-    <View style={styles.commentsModalContent}>
-      {/* Header */}
-      <View style={styles.commentsModalHeader}>
-        <Text style={styles.commentsModalTitle}>Comments</Text>
-        <TouchableOpacity onPress={() => {
-          setCommentsModalVisible(false);
-          setSelectedPostId(null);
-          setSelectedPostData(null);
-        }}>
-          <FontAwesome5 name="times" size={20} color={COLORS.textSecondary} />
-        </TouchableOpacity>
-      </View>
-
-      {/* Comments List */}
-      {selectedPost ? (
-        <>
-          {selectedPostData?.comments?.length > 0 ? (
-            <FlatList
-              data={selectedPostData.comments}
-              keyExtractor={(item) => item.id}
-              renderItem={renderComment}
-              contentContainerStyle={{ paddingBottom: 60 }} // leave space for input
-            />
-          ) : (
-            <View style={styles.noCommentsContainer}>
-              <FontAwesome5 name="comment" size={48} color={COLORS.textLight} />
-              <Text style={styles.noCommentsText}>No comments yet</Text>
-              <Text style={styles.noCommentsSubtext}>Be the first to comment!</Text>
+      {/* Comments Modal */}
+      <Modal visible={commentsModalVisible} transparent={true} animationType="slide">
+        <View style={styles.commentsModalContainer}>
+          <TouchableOpacity 
+            style={styles.modalBackdrop}
+            activeOpacity={1}
+            onPress={() => {
+              setCommentsModalVisible(false);
+              setSelectedPostId(null);
+              setSelectedPostData(null);
+            }}
+          />
+          <View style={styles.commentsModalContent}>
+            <View style={styles.commentsModalHeader}>
+              <Text style={styles.commentsModalTitle}>Comments</Text>
+              <TouchableOpacity onPress={() => {
+                setCommentsModalVisible(false);
+                setSelectedPostId(null);
+                setSelectedPostData(null);
+              }}>
+                <FontAwesome5 name="times" size={20} color={COLORS.textSecondary} />
+              </TouchableOpacity>
             </View>
-          )}
-        </>
-      ) : null}
 
-      {/* Comment Input */}
-      <View style={styles.commentInputContainer}>
-        <TextInput
-          style={styles.commentInput}
-          placeholder="Write a comment..."
-          value={commentText}
-          onChangeText={setCommentText}
-          multiline
-        />
-        <TouchableOpacity style={styles.sendButton} onPress={handleComment}>
-          <FontAwesome5 name="paper-plane" size={20} color={COLORS.primary} />
-        </TouchableOpacity>
-      </View>
-    </View>
-  </KeyboardAvoidingView>
-</Modal>
+            {selectedPost ? (
+              <>
+                {selectedPostData?.comments?.length > 0 ? (
+                  <FlatList
+                    data={selectedPostData.comments}
+                    keyExtractor={(item) => item.id}
+                    renderItem={renderComment}
+                    contentContainerStyle={{ paddingBottom: 20, paddingHorizontal: 20, paddingTop: 16 }}
+                    keyboardShouldPersistTaps="handled"
+                  />
+                ) : (
+                  <View style={styles.noCommentsContainer}>
+                    <FontAwesome5 name="comment" size={48} color={COLORS.textLight} />
+                    <Text style={styles.noCommentsText}>No comments yet</Text>
+                    <Text style={styles.noCommentsSubtext}>Be the first to comment!</Text>
+                  </View>
+                )}
+              </>
+            ) : null}
 
+            <View style={styles.commentInputContainer}>
+              <TextInput
+                style={styles.commentInput}
+                placeholder="Write a comment..."
+                value={commentText}
+                onChangeText={setCommentText}
+                multiline
+                editable={!submittingComment}
+                maxLength={500}
+              />
+              <TouchableOpacity 
+                style={[styles.sendButton, (submittingComment || !commentText.trim()) && styles.sendButtonDisabled]} 
+                onPress={handleComment}
+                disabled={submittingComment || !commentText.trim()}
+              >
+                {submittingComment ? (
+                  <ActivityIndicator size="small" color={COLORS.primary} />
+                ) : (
+                  <FontAwesome5 name="paper-plane" size={20} color={COLORS.primary} />
+                )}
+              </TouchableOpacity>
+            </View>
+
+            {commentSuccess && (
+              <View style={styles.commentSuccessContainer}>
+                <FontAwesome5 name="check-circle" size={14} color={COLORS.success} />
+                <Text style={styles.commentSuccessText}>Comment added!</Text>
+              </View>
+            )}
+          </View>
+        </View>
+      </Modal>
 
       {/* Image Modal */}
       <Modal visible={imageModalVisible} transparent={true} animationType="fade">
@@ -709,7 +836,7 @@ export default function Announcements({ onBack }) {
         </View>
       </Modal>
 
-      {/* Event Modal */}
+      {/* Event Modal (Events on this day) */}
       <Modal visible={eventModalVisible} transparent={true} animationType="slide">
         <View style={styles.eventModalContainer}>
           <View style={styles.eventModalContent}>
@@ -738,6 +865,97 @@ export default function Announcements({ onBack }) {
           </View>
         </View>
       </Modal>
+
+      {/* NEW: Event Detail Modal with Sponsors Carousel */}
+      <Modal visible={sponsorModalVisible} transparent={true} animationType="slide">
+        <View style={styles.eventDetailModalContainer}>
+          <View style={styles.eventDetailModalContent}>
+            <View style={styles.eventDetailModalHeader}>
+              <Text style={styles.eventDetailModalTitle}>Event Details</Text>
+              <TouchableOpacity onPress={() => {
+                setSponsorModalVisible(false);
+                setSelectedEventDetails(null);
+                setSelectedEventSponsors([]);
+              }}>
+                <FontAwesome5 name="times" size={20} color={COLORS.textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false}>
+              {selectedEventDetails && (
+                <View style={styles.eventDetailContent}>
+                  <View style={styles.eventDetailSection}>
+                    <Text style={styles.eventDetailTitle}>{selectedEventDetails.title}</Text>
+                    <Text style={styles.eventDetailDescription}>{selectedEventDetails.description}</Text>
+                    
+                    <View style={styles.eventDetailMeta}>
+                      <View style={styles.eventDetailMetaItem}>
+                        <FontAwesome5 name="calendar" size={14} color={COLORS.primary} />
+                        <Text style={styles.eventDetailMetaText}>
+                          {new Date(selectedEventDetails.date).toLocaleDateString('en-US', {
+                            weekday: 'long',
+                            year: 'numeric',
+                            month: 'long',
+                            day: 'numeric'
+                          })}
+                        </Text>
+                      </View>
+                      
+                      {selectedEventDetails.fromTime && selectedEventDetails.toTime && (
+                        <View style={styles.eventDetailMetaItem}>
+                          <FontAwesome5 name="clock" size={14} color={COLORS.primary} />
+                          <Text style={styles.eventDetailMetaText}>
+                            {manualTimeFormat(selectedEventDetails.fromTime)} - {manualTimeFormat(selectedEventDetails.toTime)}
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+                  </View>
+
+                  {selectedEventSponsors.length > 0 && (
+                    <View style={styles.sponsorsSection}>
+                      <View style={styles.sponsorsSectionHeader}>
+                        <FontAwesome5 name="handshake" size={18} color={COLORS.primary} />
+                        <Text style={styles.sponsorsSectionTitle}>
+                          Event Sponsors ({selectedEventSponsors.length})
+                        </Text>
+                      </View>
+                      
+                      <FlatList
+                        data={selectedEventSponsors}
+                        keyExtractor={(item) => item.id}
+                        horizontal
+                        showsHorizontalScrollIndicator={false}
+                        snapToInterval={screenWidth * 0.75 + 16}
+                        decelerationRate="fast"
+                        contentContainerStyle={styles.sponsorCarouselContainer}
+                        renderItem={({ item: sponsor }) => (
+                          <View style={styles.sponsorCard}>
+                            {sponsor.image ? (
+                              <Image
+                                source={{ uri: sponsor.image }}
+                                style={styles.sponsorImage}
+                                resizeMode="contain"
+                              />
+                            ) : (
+                              <View style={styles.sponsorImagePlaceholder}>
+                                <FontAwesome5 name="building" size={40} color={COLORS.textLight} />
+                              </View>
+                            )}
+                            <View style={styles.sponsorCardContent}>
+                              <Text style={styles.sponsorName}>{sponsor.name}</Text>
+                            </View>
+                          </View>
+                        )}
+                      />
+                    </View>
+                  )}
+                </View>
+              )}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -748,7 +966,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
   },
   
-  // Tab Styles
   tabContainer: {
     flexDirection: 'row',
     backgroundColor: COLORS.white,
@@ -782,12 +999,10 @@ const styles = StyleSheet.create({
     color: COLORS.white,
   },
   
-  // Content
   contentContainer: {
     flex: 1,
   },
   
-  // Loading
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -800,7 +1015,6 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
   },
   
-  // Section Titles
   sectionTitle: {
     fontSize: 20,
     fontWeight: '700',
@@ -809,7 +1023,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   
-  // Carousel Styles
   carouselSection: {
     marginBottom: 32,
   },
@@ -821,35 +1034,43 @@ const styles = StyleSheet.create({
     marginRight: CAROUSEL_SPACING,
   },
   carouselCard: {
-    height: 200,
+    height: 225,
     borderRadius: 20,
     overflow: 'hidden',
     position: 'relative',
+    backgroundColor: COLORS.white,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+    borderWidth: 1,
+    borderColor: COLORS.border,
   },
   carouselImage: {
     width: '100%',
-    height: '100%',
+    height: '50%',
   },
   carouselPlaceholder: {
-    backgroundColor: COLORS.surface,
+    backgroundColor: COLORS.primary,
     justifyContent: 'center',
     alignItems: 'center',
+    height: '50%',
+    width: '100%',
   },
-  carouselOverlay: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    padding: 16,
+  carouselInfoSection: {
+    height: '50%',
+    backgroundColor: COLORS.white,
+    padding: 12,
+    justifyContent: 'space-between',
   },
   carouselContent: {
     flex: 1,
   },
   carouselTitle: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '700',
-    color: COLORS.white,
+    color: COLORS.text,
     marginBottom: 4,
   },
   carouselSnippet: {
@@ -861,11 +1082,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    marginTop: 4,
   },
   carouselTime: {
-    fontSize: 12,
-    color: 'rgba(255,255,255,0.8)',
-    marginLeft: 4,
+    fontSize: 10,
+    color: COLORS.textLight,
+    marginLeft: 0,
     flex: 1,
   },
   carouselStats: {
@@ -882,7 +1104,6 @@ const styles = StyleSheet.create({
     marginLeft: 4,
   },
   
-  // Facebook-style Post Cards
   postCard: {
     backgroundColor: COLORS.white,
     marginBottom: 12,
@@ -951,7 +1172,6 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.surface,
   },
   
-  // Post Stats (likes/comments count)
   postStats: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -988,7 +1208,6 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   
-  // Post Actions (Like, Comment) - Share removed
   postActions: {
     flexDirection: 'row',
     paddingHorizontal: 16,
@@ -1016,7 +1235,6 @@ const styles = StyleSheet.create({
     color: COLORS.like,
   },
   
-  // Comments Preview
   commentsPreview: {
     paddingHorizontal: 16,
     paddingBottom: 12,
@@ -1054,24 +1272,35 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   
-  // Comments Modal
   commentsModalContainer: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'flex-end',
   },
+  modalBackdrop: {
+    flex: 1,
+  },
   commentsModalContent: {
     backgroundColor: COLORS.white,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
-    maxHeight: screenHeight * 0.8,
-    paddingTop: 20,
+    maxHeight: screenHeight * 0.85,
+  },
+  commentInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+    padding: 12,
+    backgroundColor: COLORS.white,
+    paddingBottom: Platform.OS === 'ios' ? 24 : 12,
   },
   commentsModalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
+    paddingTop: 20,
     paddingBottom: 16,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border,
@@ -1147,15 +1376,18 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   
-  // Comment Input
   commentInput: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.border,
+    flex: 1,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    marginRight: 8,
+    maxHeight: 100,
+    fontSize: 15,
     backgroundColor: COLORS.white,
+    color: COLORS.text,
   },
   commentInputAvatar: {
     width: 32,
@@ -1188,8 +1420,26 @@ const styles = StyleSheet.create({
   commentSendButtonDisabled: {
     opacity: 0.5,
   },
+  sendButton: {
+    padding: 8,
+  },
+  sendButtonDisabled: {
+    opacity: 0.5,
+  },
+  commentSuccessContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+    backgroundColor: `${COLORS.success}15`,
+    gap: 6,
+  },
+  commentSuccessText: {
+    fontSize: 13,
+    color: COLORS.success,
+    fontWeight: '600',
+  },
   
-  // Calendar
   calendar: {
     marginHorizontal: 20,
     borderRadius: 16,
@@ -1201,7 +1451,6 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   
-  // Events
   upcomingSection: {
     paddingBottom: 20,
   },
@@ -1252,7 +1501,6 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
   },
   
-  // Event Items
   eventItem: {
     flexDirection: 'row',
     padding: 16,
@@ -1286,8 +1534,19 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: COLORS.textLight,
   },
+  eventDuration: {
+    fontSize: 12,
+    color: COLORS.primary,
+    fontWeight: '600',
+    marginTop: 4,
+  },
+  upcomingEventTime: {
+    fontSize: 12,
+    color: COLORS.primary,
+    fontWeight: '600',
+    marginTop: 4,
+  },
   
-  // Image Modal
   imageModalContainer: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.95)',
@@ -1306,7 +1565,6 @@ const styles = StyleSheet.create({
     height: screenHeight * 0.7,
   },
   
-  // Event Modal
   eventModalContainer: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',
@@ -1339,29 +1597,144 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
     marginTop: 12,
   },
-  carouselDetailText: {
-    color: 'white',
+  carouselDetails: {
+    marginTop: 4,
+    gap: 2,
   },
-  commentInputContainer: {
-  flexDirection: 'row',
-  alignItems: 'center',
-  borderTopWidth: 1,
-  borderTopColor: COLORS.border,
-  padding: 8,
-  backgroundColor: COLORS.white,
-},
-commentInput: {
-  flex: 1,
-  paddingVertical: 8,
-  paddingHorizontal: 12,
-  borderRadius: 20,
-  borderWidth: 1,
-  borderColor: COLORS.border,
-  marginRight: 8,
-  maxHeight: 100,
-},
-sendButton: {
-  padding: 8,
-},
-
+  carouselDetailText: {
+    color: COLORS.textSecondary,
+    fontSize: 11,
+  },
+  
+  // NEW: Sponsor Badge Styles
+  sponsorBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 8,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    backgroundColor: `${COLORS.primary}10`,
+    borderRadius: 12,
+    alignSelf: 'flex-start',
+  },
+  sponsorBadgeText: {
+    fontSize: 11,
+    color: COLORS.primary,
+    fontWeight: '600',
+  },
+  
+  // NEW: Event Detail Modal Styles
+  eventDetailModalContainer: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  eventDetailModalContent: {
+    backgroundColor: COLORS.white,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: screenHeight * 0.9,
+    paddingTop: 20,
+  },
+  eventDetailModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  eventDetailModalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: COLORS.text,
+  },
+  eventDetailContent: {
+    padding: 20,
+  },
+  eventDetailSection: {
+    marginBottom: 24,
+  },
+  eventDetailTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: COLORS.text,
+    marginBottom: 12,
+    lineHeight: 32,
+  },
+  eventDetailDescription: {
+    fontSize: 16,
+    color: COLORS.textSecondary,
+    lineHeight: 24,
+    marginBottom: 16,
+  },
+  eventDetailMeta: {
+    gap: 12,
+  },
+  eventDetailMetaItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  eventDetailMetaText: {
+    fontSize: 14,
+    color: COLORS.text,
+    fontWeight: '500',
+  },
+  sponsorsSection: {
+    paddingTop: 20,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+  },
+  sponsorsSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 16,
+  },
+  sponsorsSectionTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: COLORS.text,
+  },
+  sponsorCarouselContainer: {
+    paddingVertical: 8,
+  },
+  sponsorCard: {
+    width: screenWidth * 0.75,
+    backgroundColor: COLORS.white,
+    borderRadius: 16,
+    marginRight: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    overflow: 'hidden',
+  },
+  sponsorImage: {
+    width: '100%',
+    height: 150,
+    backgroundColor: COLORS.surface,
+  },
+  sponsorImagePlaceholder: {
+    width: '100%',
+    height: 150,
+    backgroundColor: COLORS.surface,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  sponsorCardContent: {
+    padding: 16,
+  },
+  sponsorName: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: COLORS.text,
+    textAlign: 'center',
+  },
 });

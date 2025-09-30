@@ -1,10 +1,9 @@
 // components/EmergencyGrid.js - FIXED HEIGHT GRID WITH "I DON'T NEED HELP" AND "DISTRESS CALL" BUTTONS
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Dimensions, ScrollView, Linking, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Dimensions, ScrollView, Alert, AppState } from 'react-native';
 import { FontAwesome5 } from '@expo/vector-icons';
 import { useVideoPlayer, VideoView } from 'expo-video';
-import { doc, onSnapshot } from 'firebase/firestore';
-import { db } from '../firebase'; // Adjust the path to your Firebase config
+import * as Location from 'expo-location';
 
 const { width, height } = Dimensions.get('window');
 
@@ -30,6 +29,26 @@ function AlarmButton({ onPress, onSwitchToAnnouncements, onDistressCall }) {
     player.loop = true;
     player.play();
   });
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextAppState) => {
+      // When app comes back to foreground, ensure video is playing
+      if (nextAppState === 'active') {
+        if (player && !player.playing) {
+          player.play();
+        }
+      }
+    });
+
+    // Ensure video starts playing when component mounts
+    if (player) {
+      player.play();
+    }
+
+    return () => {
+      subscription.remove();
+    };
+  }, [player]);
 
   return (
     <View style={styles.centerContent}>
@@ -69,72 +88,210 @@ function AlarmButton({ onPress, onSwitchToAnnouncements, onDistressCall }) {
   );
 }
 
-export default function EmergencyGrid({ buttons, onButtonPress, onSwitchToAnnouncements }) {
+export default function EmergencyGrid({ buttons, onButtonPress, onSwitchToAnnouncements, onDistressReport }) {
   const [showGrid, setShowGrid] = useState(false);
-  const [hotlineNumber, setHotlineNumber] = useState('');
 
-  // Fetch hotline number from Firebase
-  useEffect(() => {
-    const unsubscribe = onSnapshot(doc(db, "homepage_cms", "contact_info"), (doc) => {
-      if (doc.exists()) {
-        const data = doc.data();
-        setHotlineNumber(data.hotline || '');
-      }
-    });
-
-    return () => unsubscribe();
-  }, []);
-
-  // Handle distress call
+ // Handle distress call - with option to add image
   const handleDistressCall = async () => {
-    if (!hotlineNumber) {
-      Alert.alert(
-        "No Hotline Available",
-        "Emergency hotline number is not configured. Please contact your barangay office.",
-        [{ text: "OK", style: "default" }]
-      );
-      return;
-    }
-
-    // Clean the phone number (remove spaces, dashes, etc.)
-    const cleanedNumber = hotlineNumber.replace(/[^\d+]/g, '');
-    const phoneUrl = `tel:${cleanedNumber}`;
-
     try {
-      const supported = await Linking.canOpenURL(phoneUrl);
-      if (supported) {
+      // Request location permission first
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
         Alert.alert(
-          "Emergency Call",
-          `Call emergency hotline: ${hotlineNumber}?`,
-          [
-            { 
-              text: "Cancel", 
-              style: "cancel" 
-            },
-            { 
-              text: "Call Now", 
-              style: "destructive",
-              onPress: () => Linking.openURL(phoneUrl)
-            }
-          ]
-        );
-      } else {
-        Alert.alert(
-          "Cannot Make Call",
-          "Your device doesn't support phone calls or the number format is invalid.",
+          "Location Permission Required",
+          "Location access is needed to send your distress call with your current position.",
           [{ text: "OK", style: "default" }]
         );
+        return;
       }
-    } catch (error) {
-      console.error('Error making distress call:', error);
+
+      // Get location early
+      const location = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.High,
+        timeout: 15000,
+        maximumAge: 10000,
+      });
+
+      const locationObj = {
+        latitude: location.coords.latitude,
+        longitude: location.coords.longitude,
+      };
+
+      // Show options: Add Photo or Send Now
       Alert.alert(
-        "Call Error",
-        "Unable to initiate call. Please dial the emergency number manually.",
+        "Send Distress Call",
+        "Choose how to send your emergency distress call:",
+        [
+          { 
+            text: "Cancel", 
+            style: "cancel" 
+          },
+          {
+            text: "Add Photo",
+            onPress: () => showImageOptions(locationObj),
+          },
+          { 
+            text: "Send Now", 
+            style: "destructive",
+            onPress: () => sendDistressReport(locationObj, null),
+          }
+        ]
+      );
+
+    } catch (error) {
+      console.error('Error in distress call:', error);
+      Alert.alert(
+        "Distress Call Error",
+        "Unable to prepare distress call. Please try again or use manual emergency reporting.",
         [{ text: "OK", style: "default" }]
       );
     }
   };
 
+  // Show camera/gallery options
+  const showImageOptions = (locationObj) => {
+    Alert.alert(
+      "Add Photo to Distress Call",
+      "Choose photo source:",
+      [
+        {
+          text: "Cancel",
+          style: "cancel",
+          onPress: () => {
+            // Offer to send without photo
+            Alert.alert(
+              "Send Without Photo?",
+              "Do you want to send the distress call without a photo?",
+              [
+                { text: "No", style: "cancel" },
+                { 
+                  text: "Send Now", 
+                  onPress: () => sendDistressReport(locationObj, null) 
+                }
+              ]
+            );
+          }
+        },
+        {
+          text: "Take Photo",
+          onPress: async () => {
+            const imageUri = await pickImage(true);
+            if (imageUri) {
+              sendDistressReport(locationObj, imageUri);
+            } else {
+              // Photo capture cancelled, ask if they want to send anyway
+              Alert.alert(
+                "Send Without Photo?",
+                "Photo capture was cancelled. Send distress call without photo?",
+                [
+                  { text: "No", style: "cancel" },
+                  { 
+                    text: "Send Now", 
+                    onPress: () => sendDistressReport(locationObj, null) 
+                  }
+                ]
+              );
+            }
+          }
+        },
+        {
+          text: "Choose from Gallery",
+          onPress: async () => {
+            const imageUri = await pickImage(false);
+            if (imageUri) {
+              sendDistressReport(locationObj, imageUri);
+            } else {
+              // Gallery selection cancelled, ask if they want to send anyway
+              Alert.alert(
+                "Send Without Photo?",
+                "Photo selection was cancelled. Send distress call without photo?",
+                [
+                  { text: "No", style: "cancel" },
+                  { 
+                    text: "Send Now", 
+                    onPress: () => sendDistressReport(locationObj, null) 
+                  }
+                ]
+              );
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  // Pick image from camera or gallery
+  const pickImage = async (fromCamera) => {
+    try {
+      const ImagePicker = require('expo-image-picker');
+      
+      let permission;
+      if (fromCamera) {
+        permission = await ImagePicker.requestCameraPermissionsAsync();
+      } else {
+        permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      }
+
+      if (!permission.granted) {
+        Alert.alert(
+          'Permission Required',
+          `Camera/gallery access is needed to add a photo to your distress call.`,
+          [{ text: "OK", style: "default" }]
+        );
+        return null;
+      }
+
+      const result = fromCamera
+        ? await ImagePicker.launchCameraAsync({ quality: 0.7, allowsEditing: false })
+        : await ImagePicker.launchImageLibraryAsync({ quality: 0.7, allowsEditing: false });
+
+      if (!result.canceled && result.assets && result.assets[0]) {
+        return result.assets[0].uri;
+      }
+      return null;
+    } catch (error) {
+      console.error('Error picking image:', error);
+      Alert.alert(
+        "Image Error",
+        "Failed to capture/select image. You can still send the distress call without a photo.",
+        [{ text: "OK", style: "default" }]
+      );
+      return null;
+    }
+  };
+
+  // Actually send the distress report
+  const sendDistressReport = async (locationObj, imageUri) => {
+    try {
+      const distressData = {
+        type: 'Distress call',
+        location: locationObj,
+        pickedImage: imageUri,
+        additionalData: {
+          customText: 'Distress call'
+        },
+      };
+
+      if (onDistressReport) {
+        await onDistressReport(distressData);
+      } else {
+        console.warn('onDistressReport handler not provided');
+        Alert.alert(
+          "Configuration Error",
+          "Distress call handler not configured. Please contact support.",
+          [{ text: "OK", style: "default" }]
+        );
+      }
+
+    } catch (error) {
+      console.error('Error sending distress report:', error);
+      Alert.alert(
+        "Distress Call Failed",
+        "Failed to send distress call. Please try again or use manual emergency reporting.",
+        [{ text: "OK", style: "default" }]
+      );
+    }
+  };
   // Create pairs of buttons for rows
   const buttonPairs = [];
   for (let i = 0; i < buttons.length; i += 2) {

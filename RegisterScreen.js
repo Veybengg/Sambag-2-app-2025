@@ -18,7 +18,124 @@ import * as Crypto from 'expo-crypto';
 
 const { width, height } = Dimensions.get('window');
 
-// Separate Modal Component to prevent re-renders
+// Data Privacy Modal Component
+const DataPrivacyModal = memo(({ visible, onAccept, onDecline }) => {
+  if (!visible) return null;
+
+  return (
+    <View style={styles.modalOverlay}>
+      <View style={styles.privacyModalContainer}>
+        <ScrollView 
+          style={styles.privacyScrollView}
+          showsVerticalScrollIndicator={true}
+        >
+          <View style={styles.privacyHeader}>
+            <Ionicons name="shield-checkmark" size={48} color="#6366F1" />
+            <Text style={styles.privacyTitle}>Data Privacy Notice</Text>
+          </View>
+
+          <View style={styles.privacyContent}>
+            <Text style={styles.privacySection}>
+              <Text style={styles.privacySectionTitle}>Welcome to Sambag 2 Emergency Reporting System</Text>
+              {'\n\n'}
+              Before you proceed with registration, please read and understand how we collect, use, and protect your personal information.
+            </Text>
+
+            <Text style={styles.privacySection}>
+              <Text style={styles.privacySectionTitle}>Information We Collect:</Text>
+              {'\n\n'}
+              • <Text style={styles.privacyBold}>Personal Information:</Text> Your first name, last name, and contact number
+              {'\n'}
+              • <Text style={styles.privacyBold}>Identification:</Text> A photo of your valid ID for verification purposes
+              {'\n'}
+              • <Text style={styles.privacyBold}>Location Data:</Text> Your real-time location when you submit an emergency report
+              {'\n'}
+              • <Text style={styles.privacyBold}>Photos (Optional):</Text> Images you choose to attach to your emergency reports
+              {'\n'}
+              • <Text style={styles.privacyBold}>Report Details:</Text> Information about the emergency incidents you report
+            </Text>
+
+            <Text style={styles.privacySection}>
+              <Text style={styles.privacySectionTitle}>How We Use Your Information:</Text>
+              {'\n\n'}
+              • Verify your identity as a resident of Barangay Sambag 2
+              {'\n'}
+              • Process and respond to your emergency reports
+              {'\n'}
+              • Contact you regarding your submitted reports
+              {'\n'}
+              • Locate the emergency incident using your location data
+              {'\n'}
+              • Maintain records for safety and accountability purposes
+              {'\n'}
+              • Improve our emergency response services
+            </Text>
+
+            <Text style={styles.privacySection}>
+              <Text style={styles.privacySectionTitle}>Data Protection:</Text>
+              {'\n\n'}
+              • Your personal information is stored securely in encrypted databases
+              {'\n'}
+              • Access to your data is limited to authorized barangay officials only
+              {'\n'}
+              • Your ID photo is used solely for verification and is not shared with third parties
+              {'\n'}
+              • Location data is only collected when you submit a report
+              {'\n'}
+              • We implement industry-standard security measures to protect your information
+            </Text>
+
+            <Text style={styles.privacySection}>
+              <Text style={styles.privacySectionTitle}>Your Rights:</Text>
+              {'\n\n'}
+              • You have the right to access your personal information
+              {'\n'}
+              • You can request correction of inaccurate data
+              {'\n'}
+              • You may withdraw consent at any time (though this may limit app functionality)
+              {'\n'}
+              • You can request deletion of your account and associated data
+            </Text>
+
+            <Text style={styles.privacySection}>
+              <Text style={styles.privacySectionTitle}>Data Retention:</Text>
+              {'\n\n'}
+              Your personal information and report history will be retained as long as your account is active and for a reasonable period thereafter as required by barangay records management policies.
+            </Text>
+
+            <Text style={styles.privacySection}>
+              <Text style={styles.privacySectionTitle}>Contact Us:</Text>
+              {'\n\n'}
+              If you have questions or concerns about how we handle your data, please contact the Barangay Sambag 2 office.
+            </Text>
+
+            <Text style={styles.privacyFooter}>
+              By clicking "I Accept", you acknowledge that you have read and understood this Data Privacy Notice and consent to the collection, use, and processing of your personal information as described above.
+            </Text>
+          </View>
+        </ScrollView>
+
+        <View style={styles.privacyButtonContainer}>
+          <TouchableOpacity
+            style={styles.privacyDeclineButton}
+            onPress={onDecline}
+          >
+            <Text style={styles.privacyDeclineText}>Decline</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity
+            style={styles.privacyAcceptButton}
+            onPress={onAccept}
+          >
+            <Text style={styles.privacyAcceptText}>I Accept</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </View>
+  );
+});
+
+// Verification Modal Component
 const VerificationModal = memo(({ 
   visible, 
   onClose, 
@@ -47,7 +164,7 @@ const VerificationModal = memo(({
           </View>
           <Text style={styles.modalTitle}>Barangay Verification</Text>
           <Text style={styles.modalSubtitle}>
-            To complete your registration, please name one current barangay or SK official serving in Barangay Sambag 2. You can use their full name or nickname.
+            To complete your registration, please name one current barangay or SK official serving in Barangay Sambag 2. You can use their full name, first name, last name, or nickname.
           </Text>
         </View>
         
@@ -97,7 +214,9 @@ const VerificationModal = memo(({
 });
 
 export default function RegisterScreen({ onRegistered }) {
-  const [mode, setMode] = useState('register'); // 'login' or 'register'
+  const [mode, setMode] = useState('register');
+  const [showDataPrivacy, setShowDataPrivacy] = useState(false);
+  const [dataPrivacyAccepted, setDataPrivacyAccepted] = useState(false);
 
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
@@ -108,21 +227,62 @@ export default function RegisterScreen({ onRegistered }) {
   const [idImage, setIdImage] = useState(null);
   const [loading, setLoading] = useState(false);
   
-  // Password visibility states
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   
-  // States for barangay officials verification
   const [showVerification, setShowVerification] = useState(false);
   const [verificationPassed, setVerificationPassed] = useState(false);
   const [verificationLoading, setVerificationLoading] = useState(false);
 
-  // States for username validation
   const [usernameError, setUsernameError] = useState('');
   const [checkingUsername, setCheckingUsername] = useState(false);
-
-  // Password confirmation error
   const [passwordError, setPasswordError] = useState('');
+
+  // Check if user has accepted data privacy on component mount
+  useEffect(() => {
+    const checkDataPrivacyAcceptance = async () => {
+      try {
+        const accepted = await AsyncStorage.getItem('data_privacy_accepted');
+        if (accepted === 'true') {
+          setDataPrivacyAccepted(true);
+        }
+      } catch (error) {
+        console.error('Error checking data privacy acceptance:', error);
+      }
+    };
+    
+    checkDataPrivacyAcceptance();
+  }, []);
+
+  // Show data privacy modal when in register mode and not accepted
+  useEffect(() => {
+    console.log('Mode:', mode, 'Privacy accepted:', dataPrivacyAccepted, 'Show modal:', showDataPrivacy);
+    if (mode === 'register' && !dataPrivacyAccepted) {
+      setShowDataPrivacy(true);
+    } else {
+      setShowDataPrivacy(false);
+    }
+  }, [mode, dataPrivacyAccepted]);
+
+  const handleAcceptPrivacy = async () => {
+    try {
+      await AsyncStorage.setItem('data_privacy_accepted', 'true');
+      setDataPrivacyAccepted(true);
+      setShowDataPrivacy(false);
+    } catch (error) {
+      console.error('Error saving privacy acceptance:', error);
+      Alert.alert('Error', 'Failed to save privacy acceptance. Please try again.');
+    }
+  };
+
+  const handleDeclinePrivacy = () => {
+    setShowDataPrivacy(false);
+    setMode('login'); // Switch to login mode if user declines
+    Alert.alert(
+      'Privacy Policy Required',
+      'You must accept the Data Privacy Notice to register. Switch back to the Register tab if you change your mind.'
+    );
+  };
 
   const pickImage = async (fromCamera = false) => {
     const permission = fromCamera
@@ -171,7 +331,6 @@ export default function RegisterScreen({ onRegistered }) {
     }
   }, []);
 
-  // Debounced username check using useEffect
   useEffect(() => {
     if (username && mode === 'register') {
       const timeoutId = setTimeout(() => {
@@ -185,7 +344,6 @@ export default function RegisterScreen({ onRegistered }) {
     }
   }, [username, mode, checkUsernameAvailability]);
 
-  // Password confirmation validation
   useEffect(() => {
     if (mode === 'register' && confirmPassword && password !== confirmPassword) {
       setPasswordError('Passwords do not match');
@@ -194,7 +352,6 @@ export default function RegisterScreen({ onRegistered }) {
     }
   }, [password, confirmPassword, mode]);
 
-  // Hash password function
   const hashPassword = async (plainPassword) => {
     try {
       const digest = await Crypto.digestStringAsync(
@@ -209,23 +366,17 @@ export default function RegisterScreen({ onRegistered }) {
     }
   };
 
-  // Upload image to Firebase Storage
   const uploadImageToStorage = async (imageUri) => {
     if (!imageUri) return null;
     
     try {
-      // Convert URI to blob
       const response = await fetch(imageUri);
       const blob = await response.blob();
       
-      // Create a unique filename
       const filename = `id_${Date.now()}_${Math.random().toString(36).substr(2, 9)}.jpg`;
       const storageRef = ref(storage, `user_ids/${filename}`);
       
-      // Upload the blob
       const snapshot = await uploadBytes(storageRef, blob);
-      
-      // Get the download URL
       const downloadURL = await getDownloadURL(snapshot.ref);
       return downloadURL;
     } catch (error) {
@@ -242,6 +393,10 @@ export default function RegisterScreen({ onRegistered }) {
 
     setVerificationLoading(true);
     try {
+      // Get user profiles from ManageUsers (userProfiles collection)
+      const userProfilesRef = collection(db, 'userProfiles');
+      const userProfilesSnapshot = await getDocs(userProfilesRef);
+      
       // Get barangay officials
       const barangayOfficialsRef = collection(db, 'barangay_officials');
       const barangaySnapshot = await getDocs(barangayOfficialsRef);
@@ -255,17 +410,42 @@ export default function RegisterScreen({ onRegistered }) {
       
       // Helper function to check if input matches official data
       const checkOfficialMatch = (official) => {
-        if (!official.name) return false;
+        if (!official.name && !official.firstName && !official.lastName) return false;
         
-        // Check against official name
-        const officialWords = official.name.toLowerCase().split(/\s+/);
-        const nameMatch = inputWords.some(inputWord => 
-          officialWords.some(officialWord => 
-            inputWord === officialWord && inputWord.length >= 2 // Allow 2+ character matches
-          )
-        );
+        // For barangay_officials and sk_officials (with 'name' field)
+        if (official.name) {
+          const officialWords = official.name.toLowerCase().split(/\s+/);
+          const nameMatch = inputWords.some(inputWord => 
+            officialWords.some(officialWord => 
+              inputWord === officialWord && inputWord.length >= 2
+            )
+          );
+          
+          if (nameMatch) return true;
+        }
         
-        if (nameMatch) return true;
+        // For userProfiles (with 'firstName' and 'lastName' fields)
+        if (official.firstName || official.lastName) {
+          const firstName = (official.firstName || '').toLowerCase();
+          const lastName = (official.lastName || '').toLowerCase();
+          const fullName = `${firstName} ${lastName}`.trim();
+          const nameWords = fullName.split(/\s+/);
+          
+          const nameMatch = inputWords.some(inputWord => 
+            nameWords.some(nameWord => 
+              inputWord === nameWord && inputWord.length >= 2
+            )
+          );
+          
+          if (nameMatch) return true;
+          
+          // Check if input matches first name or last name exactly
+          const exactMatch = inputWords.some(inputWord => 
+            inputWord === firstName || inputWord === lastName
+          );
+          
+          if (exactMatch) return true;
+        }
         
         // Check against nicknames if they exist
         if (official.nicknames && Array.isArray(official.nicknames)) {
@@ -273,14 +453,13 @@ export default function RegisterScreen({ onRegistered }) {
             const nicknameWords = nickname.toLowerCase().split(/\s+/);
             return inputWords.some(inputWord =>
               nicknameWords.some(nicknameWord =>
-                inputWord === nicknameWord && inputWord.length >= 2 // Allow 2+ character matches
+                inputWord === nicknameWord && inputWord.length >= 2
               )
             );
           });
           
           if (nicknameMatch) return true;
           
-          // Also check for exact nickname matches (case-insensitive)
           const exactNicknameMatch = official.nicknames.some(nickname =>
             nickname.toLowerCase() === officialName.toLowerCase().trim()
           );
@@ -291,15 +470,25 @@ export default function RegisterScreen({ onRegistered }) {
         return false;
       };
       
-      // Check barangay officials
-      barangaySnapshot.forEach((doc) => {
-        const official = doc.data();
-        if (checkOfficialMatch(official)) {
+      // Check user profiles from ManageUsers
+      userProfilesSnapshot.forEach((doc) => {
+        const profile = doc.data();
+        if (checkOfficialMatch(profile)) {
           isValidOfficial = true;
         }
       });
       
-      // Check SK officials if not found in barangay officials
+      // Check barangay officials if not found in user profiles
+      if (!isValidOfficial) {
+        barangaySnapshot.forEach((doc) => {
+          const official = doc.data();
+          if (checkOfficialMatch(official)) {
+            isValidOfficial = true;
+          }
+        });
+      }
+      
+      // Check SK officials if still not found
       if (!isValidOfficial) {
         skSnapshot.forEach((doc) => {
           const official = doc.data();
@@ -327,6 +516,12 @@ export default function RegisterScreen({ onRegistered }) {
   }, []);
 
   const startRegistration = () => {
+    if (!dataPrivacyAccepted) {
+      Alert.alert('Privacy Policy Required', 'Please accept the Data Privacy Notice to continue.');
+      setShowDataPrivacy(true);
+      return;
+    }
+
     if (!firstName || !lastName || !contact || !username || !password || !confirmPassword || !idImage) {
       Alert.alert('Missing Info', 'Please fill out all fields and upload your ID.');
       return;
@@ -363,7 +558,6 @@ export default function RegisterScreen({ onRegistered }) {
   const handleRegister = async () => {
     setLoading(true);
     try {
-      // Double-check username availability before final registration
       const isUsernameAvailable = await checkUsernameAvailability(username);
       if (!isUsernameAvailable) {
         Alert.alert('Username taken', 'Please choose a different username.');
@@ -371,7 +565,6 @@ export default function RegisterScreen({ onRegistered }) {
         return;
       }
 
-      // Upload ID image to Firebase Storage
       let idImageUrl = null;
       if (idImage) {
         try {
@@ -383,24 +576,21 @@ export default function RegisterScreen({ onRegistered }) {
         }
       }
 
-      // Hash the password before storing
       const hashedPassword = await hashPassword(password);
-
-      // Combine first and last name
       const name = `${firstName.trim()} ${lastName.trim()}`;
       const newUser = { 
         name, 
         contact, 
         username: username.trim(), 
-        password: hashedPassword,  // Store hashed password
-        idImage: idImageUrl  // Store Firebase Storage URL
+        password: hashedPassword,
+        idImage: idImageUrl
       };
       await addDoc(collection(db, 'users'), newUser);
 
       await AsyncStorage.setItem('user_registered', 'true');
       await AsyncStorage.setItem('user_data', JSON.stringify({
         ...newUser,
-        password: password  // Store original password in local storage for convenience
+        password: password
       }));
 
       Alert.alert('Success', 'Registration complete! Your ID has been securely uploaded.');
@@ -420,7 +610,6 @@ export default function RegisterScreen({ onRegistered }) {
 
     setLoading(true);
     try {
-      // Hash the entered password for comparison
       const hashedPassword = await hashPassword(password);
       
       const usersRef = collection(db, 'users');
@@ -434,7 +623,7 @@ export default function RegisterScreen({ onRegistered }) {
         await AsyncStorage.setItem('user_registered', 'true');
         await AsyncStorage.setItem('user_data', JSON.stringify({
           ...user,
-          password: password  // Store original password in local storage
+          password: password
         }));
 
         Alert.alert('Welcome back!', `Hello ${user.name}`);
@@ -449,7 +638,6 @@ export default function RegisterScreen({ onRegistered }) {
     setLoading(false);
   };
 
-  // Helper function to get button text for registration mode
   const getRegisterButtonText = () => {
     if (loading) return 'Please wait...';
     if (!verificationPassed) return 'Verify';
@@ -464,7 +652,6 @@ export default function RegisterScreen({ onRegistered }) {
         contentContainerStyle={styles.scrollContainer}
         showsVerticalScrollIndicator={false}
       >
-        {/* App Header */}
         <View style={styles.headerContainer}>
           <View style={styles.logoContainer}>
             <Image
@@ -477,7 +664,6 @@ export default function RegisterScreen({ onRegistered }) {
           <Text style={styles.appSubtitle}>Emergency Reporting System</Text>
         </View>
 
-        {/* Mode Toggle */}
         <View style={styles.modeToggleContainer}>
           <TouchableOpacity 
             style={[styles.modeToggle, mode === 'register' && styles.activeModeToggle]}
@@ -497,7 +683,6 @@ export default function RegisterScreen({ onRegistered }) {
           </TouchableOpacity>
         </View>
 
-        {/* Form Card */}
         <View style={styles.formCard}>
           <Text style={styles.formTitle}>
             {mode === 'register' ? 'Create Your Account' : 'Welcome Back!'}
@@ -510,7 +695,6 @@ export default function RegisterScreen({ onRegistered }) {
 
           {mode === 'register' && (
             <>
-              {/* First Name and Last Name Row */}
               <View style={styles.nameRowContainer}>
                 <View style={styles.nameInputContainer}>
                   <Text style={styles.label}>
@@ -561,7 +745,6 @@ export default function RegisterScreen({ onRegistered }) {
                     placeholder="Enter your 11-digit contact number"
                     value={contact}
                     onChangeText={(text) => {
-                      // Only allow numbers and limit to 11 digits
                       const numericText = text.replace(/[^0-9]/g, '');
                       if (numericText.length <= 11) {
                         setContact(numericText);
@@ -642,83 +825,82 @@ export default function RegisterScreen({ onRegistered }) {
           </View>
 
           {mode === 'register' && (
-            <View style={styles.inputContainer}>
-              <Text style={styles.label}>
-                Confirm Password
-                <Text style={styles.required}> *</Text>
-              </Text>
-              <View style={[styles.inputWrapper, passwordError && styles.inputWrapperError]}>
-                <Ionicons name="lock-closed-outline" size={20} color="#6B7280" style={styles.inputIcon} />
-                <TextInput
-                  style={styles.input}
-                  placeholder="Confirm your password"
-                  value={confirmPassword}
-                  onChangeText={setConfirmPassword}
-                  secureTextEntry={!showConfirmPassword}
-                  placeholderTextColor="#9CA3AF"
-                />
-                <TouchableOpacity
-                  onPress={() => setShowConfirmPassword(!showConfirmPassword)}
-                  style={styles.eyeButton}
-                >
-                  <Ionicons 
-                    name={showConfirmPassword ? "eye-outline" : "eye-off-outline"} 
-                    size={20} 
-                    color="#6B7280" 
+            <>
+              <View style={styles.inputContainer}>
+                <Text style={styles.label}>
+                  Confirm Password
+                  <Text style={styles.required}> *</Text>
+                </Text>
+                <View style={[styles.inputWrapper, passwordError && styles.inputWrapperError]}>
+                  <Ionicons name="lock-closed-outline" size={20} color="#6B7280" style={styles.inputIcon} />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Confirm your password"
+                    value={confirmPassword}
+                    onChangeText={setConfirmPassword}
+                    secureTextEntry={!showConfirmPassword}
+                    placeholderTextColor="#9CA3AF"
                   />
-                </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => setShowConfirmPassword(!showConfirmPassword)}
+                    style={styles.eyeButton}
+                  >
+                    <Ionicons 
+                      name={showConfirmPassword ? "eye-outline" : "eye-off-outline"} 
+                      size={20} 
+                      color="#6B7280" 
+                    />
+                  </TouchableOpacity>
+                </View>
+                {passwordError && (
+                  <Text style={styles.errorText}>{passwordError}</Text>
+                )}
+                {!passwordError && confirmPassword && password === confirmPassword && (
+                  <Text style={styles.successText}>Passwords match!</Text>
+                )}
               </View>
-              {passwordError && (
-                <Text style={styles.errorText}>{passwordError}</Text>
-              )}
-              {!passwordError && confirmPassword && password === confirmPassword && (
-                <Text style={styles.successText}>Passwords match!</Text>
-              )}
-            </View>
+
+              <View style={styles.inputContainer}>
+                <Text style={styles.label}>
+                  ID Photo
+                  <Text style={styles.required}> *</Text>
+                </Text>
+                <Text style={styles.labelSubtext}>Upload a clear photo of your ID for verification</Text>
+                
+                {!idImage ? (
+                  <View style={styles.imageUploadContainer}>
+                    <TouchableOpacity 
+                      style={styles.imageUploadButton} 
+                      onPress={() => pickImage(true)}
+                    >
+                      <Ionicons name="camera-outline" size={24} color="#6366F1" />
+                      <Text style={styles.imageUploadText}>Take Photo</Text>
+                    </TouchableOpacity>
+                    
+                    <TouchableOpacity 
+                      style={styles.imageUploadButton} 
+                      onPress={() => pickImage(false)}
+                    >
+                      <Ionicons name="image-outline" size={24} color="#6366F1" />
+                      <Text style={styles.imageUploadText}>From Gallery</Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  <View style={styles.imagePreviewContainer}>
+                    <Image source={{ uri: idImage }} style={styles.imagePreview} />
+                    <TouchableOpacity 
+                      style={styles.changeImageButton}
+                      onPress={() => setIdImage(null)}
+                    >
+                      <Ionicons name="refresh-outline" size={16} color="#FFFFFF" style={{ marginRight: 5 }} />
+                      <Text style={styles.changeImageText}>Change Image</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+              </View>
+            </>
           )}
 
-          {mode === 'register' && (
-            <View style={styles.inputContainer}>
-              <Text style={styles.label}>
-                ID Photo
-                <Text style={styles.required}> *</Text>
-              </Text>
-              <Text style={styles.labelSubtext}>Upload a clear photo of your ID for verification</Text>
-              
-              {!idImage ? (
-                <View style={styles.imageUploadContainer}>
-                  <TouchableOpacity 
-                    style={styles.imageUploadButton} 
-                    onPress={() => pickImage(true)}
-                  >
-                    <Ionicons name="camera-outline" size={24} color="#6366F1" />
-                    <Text style={styles.imageUploadText}>Take Photo</Text>
-                  </TouchableOpacity>
-                  
-                  <TouchableOpacity 
-                    style={styles.imageUploadButton} 
-                    onPress={() => pickImage(false)}
-                  >
-                    <Ionicons name="image-outline" size={24} color="#6366F1" />
-                    <Text style={styles.imageUploadText}>From Gallery</Text>
-                  </TouchableOpacity>
-                </View>
-              ) : (
-                <View style={styles.imagePreviewContainer}>
-                  <Image source={{ uri: idImage }} style={styles.imagePreview} />
-                  <TouchableOpacity 
-                    style={styles.changeImageButton}
-                    onPress={() => setIdImage(null)}
-                  >
-                    <Ionicons name="refresh-outline" size={16} color="#FFFFFF" style={{ marginRight: 5 }} />
-                    <Text style={styles.changeImageText}>Change Image</Text>
-                  </TouchableOpacity>
-                </View>
-              )}
-            </View>
-          )}
-
-          {/* Verification Status Indicator for Registration */}
           {mode === 'register' && (
             <View style={[styles.verificationStatus, verificationPassed && styles.verificationPassed]}>
               <Ionicons 
@@ -744,9 +926,15 @@ export default function RegisterScreen({ onRegistered }) {
           </TouchableOpacity>
         </View>
 
-        {/* Bottom spacing */}
         <View style={{ height: 30 }} />
       </ScrollView>
+
+      {/* Data Privacy Modal */}
+      <DataPrivacyModal
+        visible={showDataPrivacy}
+        onAccept={handleAcceptPrivacy}
+        onDecline={handleDeclinePrivacy}
+      />
 
       {/* Verification Modal */}
       <VerificationModal
@@ -871,10 +1059,12 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   nameRowContainer: {
-    // Removed - no longer needed
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 24,
   },
   nameInputContainer: {
-    // Removed - no longer needed
+    flex: 1,
   },
   inputContainer: {
     marginBottom: 24,
@@ -904,7 +1094,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#F9FAFB',
     paddingHorizontal: 16,
     minHeight: 56,
-    transition: 'border-color 0.2s ease',
   },
   inputWrapperError: {
     borderColor: '#EF4444',
@@ -1030,7 +1219,6 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
   },
-  // Modal styles
   modalOverlay: {
     position: 'absolute',
     top: 0,
@@ -1109,5 +1297,103 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '600',
+  },
+  // Data Privacy Modal Styles
+  privacyModalContainer: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    marginHorizontal: 20,
+    width: width - 40,
+    maxHeight: height * 0.85,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 20 },
+    shadowOpacity: 0.3,
+    shadowRadius: 40,
+    elevation: 24,
+  },
+  privacyScrollView: {
+    maxHeight: height * 0.65,
+  },
+  privacyHeader: {
+    alignItems: 'center',
+    paddingTop: 32,
+    paddingHorizontal: 24,
+    paddingBottom: 16,
+    borderBottomWidth: 2,
+    borderBottomColor: '#E5E7EB',
+  },
+  privacyTitle: {
+    fontSize: 26,
+    fontWeight: 'bold',
+    color: '#1F2937',
+    textAlign: 'center',
+    marginTop: 16,
+  },
+  privacyContent: {
+    padding: 24,
+  },
+  privacySection: {
+    marginBottom: 20,
+    fontSize: 14,
+    color: '#4B5563',
+    lineHeight: 22,
+  },
+  privacySectionTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#1F2937',
+  },
+  privacyBold: {
+    fontWeight: '600',
+    color: '#374151',
+  },
+  privacyFooter: {
+    marginTop: 8,
+    marginBottom: 16,
+    fontSize: 13,
+    color: '#6B7280',
+    fontStyle: 'italic',
+    lineHeight: 20,
+    textAlign: 'center',
+    paddingHorizontal: 8,
+  },
+  privacyButtonContainer: {
+    flexDirection: 'row',
+    padding: 24,
+    paddingTop: 16,
+    gap: 12,
+    borderTopWidth: 2,
+    borderTopColor: '#E5E7EB',
+  },
+  privacyDeclineButton: {
+    flex: 1,
+    paddingVertical: 16,
+    borderRadius: 12,
+    backgroundColor: '#F3F4F6',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#E5E7EB',
+  },
+  privacyDeclineText: {
+    color: '#6B7280',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  privacyAcceptButton: {
+    flex: 1,
+    paddingVertical: 16,
+    borderRadius: 12,
+    backgroundColor: '#10B981',
+    alignItems: 'center',
+    shadowColor: '#10B981',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  privacyAcceptText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '700',
   },
 });

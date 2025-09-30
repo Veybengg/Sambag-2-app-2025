@@ -14,7 +14,7 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
+        "foregroundImage": "./assets/applogo.png",
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
@@ -23,7 +23,10 @@
           "apiKey": "AIzaSyAYNfq62UV7jSp-3h6oVFUSiJ_To9l5Fmc"
         }
       },
-      "package": "com.sambag2.sambag2app"
+      "package": "com.sambag2.sambag2app",
+      "permissions": [
+        "android.permission.CALL_PHONE"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"

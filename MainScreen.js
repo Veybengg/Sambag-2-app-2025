@@ -1,6 +1,6 @@
 // MainScreen.js - Fixed EmergencyGrid Centering
 import React, { useEffect, useState } from 'react';
-import { View, StyleSheet, SafeAreaView, TouchableOpacity, Text, ImageBackground } from 'react-native';
+import { View, StyleSheet, SafeAreaView, TouchableOpacity, Text, ImageBackground, Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import uuid from 'react-native-uuid';
 import { ref as rdbRef, set, get } from 'firebase/database';
@@ -117,16 +117,18 @@ export default function MainScreen({ onLogout, onGoToAnnouncements }) {
       }
 
       const reportId = -Date.now();
-      const uploadedImageUrl = reportData.pickedImage ? 
-        await uploadImageToStorage(reportData.pickedImage) : null;
 
-      const finalReportData = {
-        reportId,
-        name: userName,
-        contact: userContact,
-        type: reportData.type,
-        location: `Latitude: ${reportData.location.latitude}, Longitude: ${reportData.location.longitude}`,
-        imageUrl: uploadedImageUrl || 'No image provided',
+// Upload image if provided
+const uploadedImageUrl = reportData.pickedImage ? 
+  await uploadImageToStorage(reportData.pickedImage) : null;
+
+const finalReportData = {
+  reportId,
+  name: userName,
+  contact: userContact,
+  type: reportData.type, // Will be "Distress call"
+  location: `Latitude: ${reportData.location.latitude}, Longitude: ${reportData.location.longitude}`,
+  imageUrl: uploadedImageUrl || 'No image provided', // Now handles images!
         idImage: userIdImage || 'No ID image',
         timestamp: new Date().toLocaleString(),
         deviceId,
@@ -142,6 +144,73 @@ export default function MainScreen({ onLogout, onGoToAnnouncements }) {
       await refreshRemainingSubmissions();
     } catch (err) {
       throw new Error(err.message || 'Failed to submit report.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // NEW: Handle distress call - sends report directly without modal
+  const handleDistressReport = async (reportData) => {
+    try {
+      setLoading(true);
+      
+      // Check submission limit first
+      const deviceId = await getDeviceId();
+      const currentDay = new Date().toISOString().split('T')[0];
+      const submissionsRef = rdbRef(realtimeDb, `led/submissions/${deviceId}/${currentDay}`);
+      const submissionsSnapshot = await get(submissionsRef);
+      const submissionCount = submissionsSnapshot.exists() ? submissionsSnapshot.val() : 0;
+      
+      if (submissionCount >= MAX_SUBMISSIONS) {
+        Alert.alert(
+          'Submission Limit Reached',
+          'You have reached your daily submission limit. Please try again tomorrow.',
+          [{ text: 'OK', style: 'default' }]
+        );
+        return;
+      }
+
+      const reportId = -Date.now();
+
+// Upload image if provided
+const uploadedImageUrl = reportData.pickedImage ? 
+  await uploadImageToStorage(reportData.pickedImage) : null;
+
+const finalReportData = {
+  reportId,
+  name: userName,
+  contact: userContact,
+  type: reportData.type, // Will be "Distress call"
+  location: `Latitude: ${reportData.location.latitude}, Longitude: ${reportData.location.longitude}`,
+  imageUrl: uploadedImageUrl || 'No image provided', // Now handles images!
+        idImage: userIdImage || 'No ID image',
+        timestamp: new Date().toLocaleString(),
+        deviceId,
+        customText: reportData.additionalData.customText, // "Distress call"
+      };
+
+      // Submit to Firebase
+      await set(rdbRef(realtimeDb, `led/reports/${reportId}`), finalReportData);
+      await set(submissionsRef, submissionCount + 1);
+      await set(rdbRef(realtimeDb, 'led/state'), 1);
+
+      // Show success and refresh submissions
+      setSuccessModalVisible(true);
+      await refreshRemainingSubmissions();
+      
+      Alert.alert(
+        'Distress Call Sent',
+        'Your distress call has been sent successfully. Help is on the way.',
+        [{ text: 'OK', style: 'default' }]
+      );
+
+    } catch (error) {
+      console.error('Error sending distress call:', error);
+      Alert.alert(
+        'Distress Call Failed',
+        'Failed to send distress call. Please try again or use manual emergency reporting.',
+        [{ text: 'OK', style: 'default' }]
+      );
     } finally {
       setLoading(false);
     }
@@ -193,6 +262,7 @@ export default function MainScreen({ onLogout, onGoToAnnouncements }) {
               buttons={BUTTONS}
               onButtonPress={handleButtonPress}
               onSwitchToAnnouncements={() => setActiveTab('announcements')}
+              onDistressReport={handleDistressReport} // NEW: Add distress call handler
             />
           </View>
         );
