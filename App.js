@@ -1,15 +1,15 @@
 import React, { useEffect, useState } from 'react';
-import { View, ActivityIndicator } from 'react-native';
+import { View, ActivityIndicator, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import RegisterScreen from './RegisterScreen';
 import MainScreen from './MainScreen';
 import Announcements from './Announcements';
-import SplashScreen from './SplashScreen'; // ✅ added
+import SplashScreen from './SplashScreen';
 
 export default function App() {
   const [isRegistered, setIsRegistered] = useState(null);
-  const [currentScreen, setCurrentScreen] = useState('main'); // 'main' or 'announcements'
-  const [showSplash, setShowSplash] = useState(true); // ✅ new splash state
+  const [currentScreen, setCurrentScreen] = useState('main');
+  const [showSplash, setShowSplash] = useState(Platform.OS !== 'web'); // ✅ Only show on mobile
 
   useEffect(() => {
     const checkRegistration = async () => {
@@ -31,7 +31,7 @@ export default function App() {
     );
   }
 
-  // 🎬 Show splashscreen first
+  // 🎬 Show splashscreen first (only on mobile)
   if (showSplash) {
     return <SplashScreen onFinish={() => setShowSplash(false)} />;
   }
