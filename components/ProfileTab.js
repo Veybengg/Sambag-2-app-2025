@@ -1,4 +1,4 @@
-// mainscreencomp/ProfileTab.js - Modern Design Update
+// mainscreencomp/ProfileTab.js - Cross-Platform (Web + Mobile)
 import React, { useState, useEffect } from 'react';
 import { 
   View, 
@@ -7,7 +7,8 @@ import {
   StyleSheet, 
   ScrollView, 
   ActivityIndicator,
-  Alert 
+  Alert,
+  Platform 
 } from 'react-native';
 import { FontAwesome5 } from '@expo/vector-icons';
 import { ref as rdbRef, get } from 'firebase/database';
@@ -29,6 +30,23 @@ const COLORS = {
   danger: '#ef4444',
   success: '#10b981',
   warning: '#f59e0b',
+};
+
+// Cross-platform alert function
+const showAlert = (title, message, buttons) => {
+  if (Platform.OS === 'web') {
+    // Web browser confirmation
+    const confirmed = window.confirm(`${title}\n\n${message}`);
+    if (confirmed && buttons) {
+      const confirmButton = buttons.find(btn => btn.style === 'destructive' || btn.text === 'Logout');
+      if (confirmButton && confirmButton.onPress) {
+        confirmButton.onPress();
+      }
+    }
+  } else {
+    // Native mobile alert
+    Alert.alert(title, message, buttons);
+  }
 };
 
 export default function ProfileTab({ 
@@ -111,7 +129,7 @@ export default function ProfileTab({
   };
 
   const handleLogoutPress = () => {
-    Alert.alert(
+    showAlert(
       'Confirm Logout',
       'Are you sure you want to logout?',
       [
@@ -126,6 +144,14 @@ export default function ProfileTab({
         },
       ]
     );
+  };
+
+  const handleMenuPress = (title, message) => {
+    if (Platform.OS === 'web') {
+      window.alert(`${title}\n\n${message}`);
+    } else {
+      Alert.alert(title, message);
+    }
   };
 
   const InfoItem = ({ icon, label, value, iconColor = COLORS.primary }) => (
@@ -257,7 +283,7 @@ export default function ProfileTab({
             <MenuItem
               icon="edit"
               title="Edit Profile"
-              onPress={() => Alert.alert('Coming Soon', 'Profile editing will be available soon.')}
+              onPress={() => handleMenuPress('Coming Soon', 'Profile editing will be available soon.')}
               iconColor={COLORS.accent}
             />
           </View>
@@ -270,19 +296,19 @@ export default function ProfileTab({
             <MenuItem
               icon="cog"
               title="App Settings"
-              onPress={() => Alert.alert('Coming Soon', 'Settings will be available soon.')}
+              onPress={() => handleMenuPress('Coming Soon', 'Settings will be available soon.')}
               iconColor={COLORS.textSecondary}
             />
             <MenuItem
               icon="question-circle"
               title="Help & Support"
-              onPress={() => Alert.alert('Help & Support', 'Contact your local emergency services for assistance.')}
+              onPress={() => handleMenuPress('Help & Support', 'Contact your local emergency services for assistance.')}
               iconColor={COLORS.textSecondary}
             />
             <MenuItem
               icon="info-circle"
               title="About App"
-              onPress={() => Alert.alert('About', 'Emergency Reporting System v1.0\nBuilt for community safety')}
+              onPress={() => handleMenuPress('About', 'Emergency Reporting System v1.0\nBuilt for community safety')}
               iconColor={COLORS.textSecondary}
             />
           </View>

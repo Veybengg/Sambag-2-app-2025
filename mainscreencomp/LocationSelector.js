@@ -1,12 +1,28 @@
-// components/LocationSelector.js
-import React from 'react';
-import { View, Text, TouchableOpacity, Alert, StyleSheet } from 'react-native';
-import { WebView } from 'react-native-webview';
+// components/LocationSelector.js - Cross-Platform (Web + Mobile)
+import React, { useEffect, useRef } from 'react';
+import { View, Text, TouchableOpacity, Alert, StyleSheet, Platform } from 'react-native';
 import { FontAwesome5 } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import { COLORS } from './theme/theme';
 
+// Only import WebView on mobile platforms
+let WebView;
+if (Platform.OS !== 'web') {
+  WebView = require('react-native-webview').WebView;
+}
+
+// Cross-platform alert function
+const showAlert = (title, message) => {
+  if (Platform.OS === 'web') {
+    window.alert(`${title}\n\n${message}`);
+  } else {
+    Alert.alert(title, message);
+  }
+};
+
 export default function LocationSelector({ locationObj, setLocationObj, webViewRef }) {
+  const iframeRef = useRef(null);
+  
   const generateMapHTML = (lat = 10.3064781, lng = 123.8902196, markerLat = null, markerLng = null) => {
     return `
     <!DOCTYPE html>
@@ -54,16 +70,28 @@ export default function LocationSelector({ locationObj, setLocationObj, webViewR
                     })
                 }).addTo(map);
                 
-                window.ReactNativeWebView.postMessage(JSON.stringify({
+                var message = JSON.stringify({
                     type: 'locationSelected',
                     latitude: e.latlng.lat,
                     longitude: e.latlng.lng
-                }));
+                });
+                
+                if (window.ReactNativeWebView) {
+                    window.ReactNativeWebView.postMessage(message);
+                } else {
+                    window.parent.postMessage(message, '*');
+                }
             });
 
             window.addEventListener('message', function(event) {
                 try {
-                    const data = JSON.parse(event.data);
+                    var data;
+                    if (typeof event.data === 'string') {
+                        data = JSON.parse(event.data);
+                    } else {
+                        data = event.data;
+                    }
+                    
                     if (data.type === 'updateLocation') {
                         if (marker) {
                             map.removeLayer(marker);
@@ -78,12 +106,6 @@ export default function LocationSelector({ locationObj, setLocationObj, webViewR
                         }).addTo(map);
                         
                         map.setView([data.latitude, data.longitude], 17);
-                        
-                        window.ReactNativeWebView.postMessage(JSON.stringify({
-                            type: 'locationSet',
-                            latitude: data.latitude,
-                            longitude: data.longitude
-                        }));
                     }
                 } catch (e) {
                     console.log('Error parsing message:', e);
@@ -97,47 +119,111 @@ export default function LocationSelector({ locationObj, setLocationObj, webViewR
 
   const handleUseCurrentLocation = async () => {
     try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Location permission required', 'Please enable location permissions to use this feature.');
-        return;
-      }
-      
-      const loc = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.High,
-        timeout: 15000,
-        maximumAge: 10000,
-      });
-      
-      const newLocation = {
-        latitude: loc.coords.latitude,
-        longitude: loc.coords.longitude,
-      };
-      
-      setLocationObj(newLocation);
-      
-      setTimeout(() => {
-        if (webViewRef.current) {
+      if (Platform.OS === 'web') {
+        // Web: Use browser geolocation API
+        if (!navigator.geolocation) {
+          showAlert('Not Supported', 'Geolocation is not supported by your browser. Please select location manually on the map.');
+          return;
+        }
+
+        // Request location from browser
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+            const newLocation = {
+              latitude: position.coords.latitude,
+              longitude: position.coords.longitude,
+            };
+            
+            setLocationObj(newLocation);
+            
+            setTimeout(() => {
+              const message = JSON.stringify({
+                type: 'updateLocation',
+                latitude: newLocation.latitude,
+                longitude: newLocation.longitude
+              });
+              
+              if (iframeRef.current && iframeRef.current.contentWindow) {
+                iframeRef.current.contentWindow.postMessage(message, '*');
+              }
+            }, 500);
+
+            showAlert('Location Found!', 'Your location has been set.');
+          },
+          (error) => {
+            console.warn('Browser location error:', error);
+            let errorMessage = 'Could not get your current location. ';
+            
+            if (error.code === 1) {
+              errorMessage += 'Location permission was denied. Please allow location access in your browser settings and try again, or select location manually on the map.';
+            } else if (error.code === 2) {
+              errorMessage += 'Location unavailable. Please check your device settings and try again, or select location manually on the map.';
+            } else if (error.code === 3) {
+              errorMessage += 'Location request timed out. Please try again or select location manually on the map.';
+            } else {
+              errorMessage += 'Please try again or select location manually on the map.';
+            }
+            
+            showAlert('Location Error', errorMessage);
+          },
+          {
+            enableHighAccuracy: true,
+            timeout: 15000,
+            maximumAge: 10000
+          }
+        );
+      } else {
+        // Mobile app: Use expo-location
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== 'granted') {
+          showAlert('Location permission required', 'Please enable location permissions to use this feature.');
+          return;
+        }
+        
+        const loc = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.High,
+          timeout: 15000,
+          maximumAge: 10000,
+        });
+        
+        const newLocation = {
+          latitude: loc.coords.latitude,
+          longitude: loc.coords.longitude,
+        };
+        
+        setLocationObj(newLocation);
+        
+        setTimeout(() => {
           const message = JSON.stringify({
             type: 'updateLocation',
             latitude: newLocation.latitude,
             longitude: newLocation.longitude
           });
-          webViewRef.current.postMessage(message);
-        }
-      }, 500);
+          
+          if (webViewRef.current) {
+            webViewRef.current.postMessage(message);
+          }
+        }, 500);
 
-      Alert.alert('Location Found!', 'Your location has been set.');
+        showAlert('Location Found!', 'Your location has been set.');
+      }
       
     } catch (e) {
       console.warn('Location error:', e);
-      Alert.alert('Location Error', 'Could not get your current location. Please try again or select location manually on the map.');
+      showAlert('Location Error', 'Could not get your current location. Please try again or select location manually on the map.');
     }
   };
 
   const handleMapMessage = (event) => {
     try {
-      const data = JSON.parse(event.nativeEvent.data);
+      let data;
+      
+      if (Platform.OS === 'web') {
+        data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+      } else {
+        data = JSON.parse(event.nativeEvent.data);
+      }
+      
       if (data.type === 'locationSelected') {
         setLocationObj({
           latitude: data.latitude,
@@ -145,9 +231,24 @@ export default function LocationSelector({ locationObj, setLocationObj, webViewR
         });
       }
     } catch (e) {
-      console.warn('Error parsing map message', e);
+      // Ignore parse errors
     }
   };
+
+  // Listen for web messages if on web
+  useEffect(() => {
+    if (Platform.OS === 'web') {
+      window.addEventListener('message', handleMapMessage);
+      return () => window.removeEventListener('message', handleMapMessage);
+    }
+  }, []);
+
+  const mapHTML = generateMapHTML(
+    locationObj?.latitude || 10.3064781, 
+    locationObj?.longitude || 123.8902196,
+    locationObj?.latitude,
+    locationObj?.longitude
+  );
 
   return (
     <View style={[styles.inputContainer, { flex: 1 }]}>
@@ -164,27 +265,35 @@ export default function LocationSelector({ locationObj, setLocationObj, webViewR
       </View>
       
       <View style={styles.mapContainer}>
-        <WebView
-          ref={webViewRef}
-          source={{ 
-            html: generateMapHTML(
-              locationObj?.latitude || 10.3064781, 
-              locationObj?.longitude || 123.8902196,
-              locationObj?.latitude,
-              locationObj?.longitude
-            ) 
-          }}
-          style={styles.mapWebView}
-          onMessage={handleMapMessage}
-          javaScriptEnabled={true}
-          domStorageEnabled={true}
-          startInLoadingState={true}
-          scalesPageToFit={true}
-          mixedContentMode="always"
-          allowsInlineMediaPlaybook={true}
-          mediaPlaybackRequiresUserAction={false}
-          originWhitelist={['*']}
-        />
+        {Platform.OS === 'web' ? (
+          // Use iframe on web
+          <iframe
+            ref={iframeRef}
+            srcDoc={mapHTML}
+            style={{
+              width: '100%',
+              height: '100%',
+              border: 'none',
+            }}
+            title="Location Map"
+          />
+        ) : (
+          // Use WebView on mobile
+          <WebView
+            ref={webViewRef}
+            source={{ html: mapHTML }}
+            style={styles.mapWebView}
+            onMessage={handleMapMessage}
+            javaScriptEnabled={true}
+            domStorageEnabled={true}
+            startInLoadingState={true}
+            scalesPageToFit={true}
+            mixedContentMode="always"
+            allowsInlineMediaPlayback={true}
+            mediaPlaybackRequiresUserAction={false}
+            originWhitelist={['*']}
+          />
+        )}
       </View>
       
       {locationObj && (

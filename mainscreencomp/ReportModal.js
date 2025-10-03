@@ -1,8 +1,8 @@
-// components/ReportModal.js
+// components/ReportModal.js - Cross-Platform (Web + Mobile)
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   Modal, View, Text, TouchableOpacity, StyleSheet, 
-  ScrollView, ActivityIndicator, Alert 
+  ScrollView, ActivityIndicator, Alert, Platform 
 } from 'react-native';
 import * as Location from 'expo-location';
 import * as ImagePicker from 'expo-image-picker';
@@ -13,9 +13,19 @@ import ReportForm from './ReportForm';
 import LocationSelector from './LocationSelector';
 import ImageUploader from './ImageUploader';
 
+// Cross-platform alert function
+const showAlert = (title, message) => {
+  if (Platform.OS === 'web') {
+    window.alert(`${title}\n\n${message}`);
+  } else {
+    Alert.alert(title, message);
+  }
+};
+
 export default function ReportModal({ visible, selectedType, onClose, onSubmit, loading }) {
   const [formData, setFormData] = useState({});
   const [pickedImage, setPickedImage] = useState(null);
+  const [imageFile, setImageFile] = useState(null); // For web file upload
   const [locationObj, setLocationObj] = useState(null);
   const [crimeTypes, setCrimeTypes] = useState([]);
   const [accidentTypes, setAccidentTypes] = useState([]);
@@ -33,13 +43,14 @@ export default function ReportModal({ visible, selectedType, onClose, onSubmit, 
   const resetForm = () => {
     setFormData({});
     setPickedImage(null);
+    setImageFile(null);
     setLocationObj(null);
   };
 
   const requestLocationPermission = async () => {
     const { status } = await Location.requestForegroundPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert('Permission denied', 'Location permission is needed to submit report.');
+      showAlert('Permission denied', 'Location permission is needed to submit report.');
       return;
     }
     const loc = await Location.getCurrentPositionAsync({});
@@ -74,7 +85,7 @@ export default function ReportModal({ visible, selectedType, onClose, onSubmit, 
       setCrimeTypes(crimesList);
     } catch (error) {
       console.error('Error loading crime types:', error);
-      Alert.alert('Error', 'Failed to load crime types. Please try again.');
+      showAlert('Error', 'Failed to load crime types. Please try again.');
     } finally {
       setLoadingTypes(false);
     }
@@ -97,52 +108,65 @@ export default function ReportModal({ visible, selectedType, onClose, onSubmit, 
       setAccidentTypes(accidentsList);
     } catch (error) {
       console.error('Error loading accident types:', error);
-      Alert.alert('Error', 'Failed to load accident types. Please try again.');
+      showAlert('Error', 'Failed to load accident types. Please try again.');
     } finally {
       setLoadingTypes(false);
     }
   };
 
-  const pickImageHandler = async (fromCamera = false) => {
-    let permission;
-    if (fromCamera) {
-      permission = await ImagePicker.requestCameraPermissionsAsync();
+  const pickImageHandler = async (useCameraOrUrl, file = null, isCamera = false) => {
+    if (Platform.OS === 'web') {
+      // Web: useCameraOrUrl is actually the image URL from the file input
+      setPickedImage(useCameraOrUrl);
+      setImageFile(file); // Store the file object for upload later
     } else {
-      permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    }
-    if (!permission.granted) {
-      Alert.alert('Permission required', 'Please allow access to take or choose photo.');
-      return;
-    }
+      // Mobile: existing logic
+      try {
+        let permission;
+        if (useCameraOrUrl) {
+          permission = await ImagePicker.requestCameraPermissionsAsync();
+        } else {
+          permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        }
+        
+        if (!permission.granted) {
+          showAlert('Permission required', 'Please allow access to take or choose photo.');
+          return;
+        }
 
-    const result = fromCamera
-      ? await ImagePicker.launchCameraAsync({ quality: 0.7, allowsEditing: false })
-      : await ImagePicker.launchImageLibraryAsync({ quality: 0.7, allowsEditing: false });
+        const result = useCameraOrUrl
+          ? await ImagePicker.launchCameraAsync({ quality: 0.7, allowsEditing: false })
+          : await ImagePicker.launchImageLibraryAsync({ quality: 0.7, allowsEditing: false });
 
-    if (!result.canceled) {
-      setPickedImage(result.assets[0].uri);
+        if (!result.canceled && result.assets && result.assets[0]) {
+          setPickedImage(result.assets[0].uri);
+        }
+      } catch (error) {
+        console.error('Image picker error:', error);
+        showAlert('Error', 'Failed to pick image.');
+      }
     }
   };
 
   const validateForm = () => {
     if (!selectedType) {
-      Alert.alert('Missing', 'Emergency type not selected.');
+      showAlert('Missing', 'Emergency type not selected.');
       return false;
     }
     if (!locationObj) {
-      Alert.alert('Missing', 'Please choose or use a location.');
+      showAlert('Missing', 'Please choose or use a location.');
       return false;
     }
     if (selectedType.toLowerCase() === 'crime' && !formData.crimeType) {
-      Alert.alert('Missing', 'Please select a crime type.');
+      showAlert('Missing', 'Please select a crime type.');
       return false;
     }
     if (selectedType.toLowerCase() === 'accident' && !formData.accidentType) {
-      Alert.alert('Missing', 'Please select an accident type.');
+      showAlert('Missing', 'Please select an accident type.');
       return false;
     }
     if (selectedType.toLowerCase() === 'others' && !formData.customText?.trim()) {
-      Alert.alert('Missing', 'Please describe the emergency.');
+      showAlert('Missing', 'Please describe the emergency.');
       return false;
     }
     return true;
@@ -160,10 +184,11 @@ export default function ReportModal({ visible, selectedType, onClose, onSubmit, 
         type: reportType,
         location: locationObj,
         pickedImage,
+        imageFile, // Pass the file object for web
         additionalData: formData,
       });
     } catch (error) {
-      Alert.alert('Error', error.message || 'Failed to submit report.');
+      showAlert('Error', error.message || 'Failed to submit report.');
     }
   };
 
@@ -189,7 +214,10 @@ export default function ReportModal({ visible, selectedType, onClose, onSubmit, 
             <ImageUploader
               pickedImage={pickedImage}
               onPickImage={pickImageHandler}
-              onRemoveImage={() => setPickedImage(null)}
+              onRemoveImage={() => {
+                setPickedImage(null);
+                setImageFile(null);
+              }}
             />
 
             <LocationSelector

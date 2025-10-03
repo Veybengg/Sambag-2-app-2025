@@ -1,6 +1,6 @@
-// MainScreen.js - Fixed EmergencyGrid Centering
+// MainScreen.js - Cross-Platform (Web + Mobile)
 import React, { useEffect, useState } from 'react';
-import { View, StyleSheet, SafeAreaView, TouchableOpacity, Text, ImageBackground, Alert } from 'react-native';
+import { View, StyleSheet, SafeAreaView, TouchableOpacity, Text, Alert, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import uuid from 'react-native-uuid';
 import { ref as rdbRef, set, get } from 'firebase/database';
@@ -14,10 +14,30 @@ import ReportModal from './mainscreencomp/ReportModal';
 import SuccessModal from './mainscreencomp/SuccessModal';
 import ProfileTab from './components/ProfileTab';
 import Announcements from './Announcements';
+import AIChatbot from './AIChatbot'; 
+import WaveBackground from './WaveBackground';
 import { COLORS, BUTTONS } from './mainscreencomp/theme/theme';
 
-const { height } = require('react-native').Dimensions.get('window');
 const MAX_SUBMISSIONS = 10;
+
+// Cross-platform alert function
+const showAlert = (title, message, buttons = null) => {
+  if (Platform.OS === 'web') {
+    if (buttons) {
+      const confirmed = window.confirm(`${title}\n\n${message}`);
+      if (confirmed && buttons) {
+        const okButton = buttons.find(btn => btn.text === 'OK');
+        if (okButton && okButton.onPress) {
+          okButton.onPress();
+        }
+      }
+    } else {
+      window.alert(`${title}\n\n${message}`);
+    }
+  } else {
+    Alert.alert(title, message, buttons);
+  }
+};
 
 export default function MainScreen({ onLogout, onGoToAnnouncements }) {
   // User state
@@ -36,6 +56,8 @@ export default function MainScreen({ onLogout, onGoToAnnouncements }) {
   const [selectedType, setSelectedType] = useState('');
   const [loading, setLoading] = useState(false);
   const [remainingSubmissions, setRemainingSubmissions] = useState(null);
+
+  const tabs = ['report', 'announcements', 'chatbot', 'profile'];
 
   useEffect(() => {
     loadUser();
@@ -88,11 +110,21 @@ export default function MainScreen({ onLogout, onGoToAnnouncements }) {
     await refreshRemainingSubmissions();
   };
 
-  const uploadImageToStorage = async (localUri) => {
+  const uploadImageToStorage = async (localUri, imageFile = null) => {
     try {
       if (!localUri) return null;
-      const response = await fetch(localUri);
-      const blob = await response.blob();
+      
+      let blob;
+      
+      if (Platform.OS === 'web' && imageFile) {
+        // On web, use the File object directly
+        blob = imageFile;
+      } else {
+        // On mobile, fetch the URI
+        const response = await fetch(localUri);
+        blob = await response.blob();
+      }
+      
       const filename = `reports/${Date.now()}-${Math.floor(Math.random() * 1000)}.jpg`;
       const storageReference = storageRef(firebaseStorage, filename);
       await uploadBytes(storageReference, blob);
@@ -118,17 +150,17 @@ export default function MainScreen({ onLogout, onGoToAnnouncements }) {
 
       const reportId = -Date.now();
 
-// Upload image if provided
-const uploadedImageUrl = reportData.pickedImage ? 
-  await uploadImageToStorage(reportData.pickedImage) : null;
+      // Pass imageFile for web upload
+      const uploadedImageUrl = reportData.pickedImage ? 
+        await uploadImageToStorage(reportData.pickedImage, reportData.imageFile) : null;
 
-const finalReportData = {
-  reportId,
-  name: userName,
-  contact: userContact,
-  type: reportData.type, // Will be "Distress call"
-  location: `Latitude: ${reportData.location.latitude}, Longitude: ${reportData.location.longitude}`,
-  imageUrl: uploadedImageUrl || 'No image provided', // Now handles images!
+      const finalReportData = {
+        reportId,
+        name: userName,
+        contact: userContact,
+        type: reportData.type,
+        location: `Latitude: ${reportData.location.latitude}, Longitude: ${reportData.location.longitude}`,
+        imageUrl: uploadedImageUrl || 'No image provided',
         idImage: userIdImage || 'No ID image',
         timestamp: new Date().toLocaleString(),
         deviceId,
@@ -149,12 +181,10 @@ const finalReportData = {
     }
   };
 
-  // NEW: Handle distress call - sends report directly without modal
   const handleDistressReport = async (reportData) => {
     try {
       setLoading(true);
       
-      // Check submission limit first
       const deviceId = await getDeviceId();
       const currentDay = new Date().toISOString().split('T')[0];
       const submissionsRef = rdbRef(realtimeDb, `led/submissions/${deviceId}/${currentDay}`);
@@ -162,7 +192,7 @@ const finalReportData = {
       const submissionCount = submissionsSnapshot.exists() ? submissionsSnapshot.val() : 0;
       
       if (submissionCount >= MAX_SUBMISSIONS) {
-        Alert.alert(
+        showAlert(
           'Submission Limit Reached',
           'You have reached your daily submission limit. Please try again tomorrow.',
           [{ text: 'OK', style: 'default' }]
@@ -172,33 +202,31 @@ const finalReportData = {
 
       const reportId = -Date.now();
 
-// Upload image if provided
-const uploadedImageUrl = reportData.pickedImage ? 
-  await uploadImageToStorage(reportData.pickedImage) : null;
+      // Pass imageFile for web upload
+      const uploadedImageUrl = reportData.pickedImage ? 
+        await uploadImageToStorage(reportData.pickedImage, reportData.imageFile) : null;
 
-const finalReportData = {
-  reportId,
-  name: userName,
-  contact: userContact,
-  type: reportData.type, // Will be "Distress call"
-  location: `Latitude: ${reportData.location.latitude}, Longitude: ${reportData.location.longitude}`,
-  imageUrl: uploadedImageUrl || 'No image provided', // Now handles images!
+      const finalReportData = {
+        reportId,
+        name: userName,
+        contact: userContact,
+        type: reportData.type,
+        location: `Latitude: ${reportData.location.latitude}, Longitude: ${reportData.location.longitude}`,
+        imageUrl: uploadedImageUrl || 'No image provided',
         idImage: userIdImage || 'No ID image',
         timestamp: new Date().toLocaleString(),
         deviceId,
-        customText: reportData.additionalData.customText, // "Distress call"
+        customText: reportData.additionalData.customText,
       };
 
-      // Submit to Firebase
       await set(rdbRef(realtimeDb, `led/reports/${reportId}`), finalReportData);
       await set(submissionsRef, submissionCount + 1);
       await set(rdbRef(realtimeDb, 'led/state'), 1);
 
-      // Show success and refresh submissions
       setSuccessModalVisible(true);
       await refreshRemainingSubmissions();
       
-      Alert.alert(
+      showAlert(
         'Distress Call Sent',
         'Your distress call has been sent successfully. Help is on the way.',
         [{ text: 'OK', style: 'default' }]
@@ -206,7 +234,7 @@ const finalReportData = {
 
     } catch (error) {
       console.error('Error sending distress call:', error);
-      Alert.alert(
+      showAlert(
         'Distress Call Failed',
         'Failed to send distress call. Please try again or use manual emergency reporting.',
         [{ text: 'OK', style: 'default' }]
@@ -221,7 +249,6 @@ const finalReportData = {
       setLoading(true);
       await AsyncStorage.multiRemove(['user_registered', 'user_data']);
       
-      // Reset all states
       setUserName('');
       setUserContact('');
       setUserIdImage('');
@@ -238,17 +265,22 @@ const finalReportData = {
     }
   };
 
-  // Tab button
-  const TabButton = ({ tab, icon, isActive, onPress }) => (
+  const TabButton = ({ tab, icon, label, isActive, onPress }) => (
     <TouchableOpacity
       style={[styles.tabButton, isActive && styles.activeTabButton]}
-      onPress={() => onPress(tab)}
+      onPress={() => setActiveTab(tab)}
+      activeOpacity={0.7}
     >
-      <FontAwesome5 
-        name={icon} 
-        size={24} 
-        color={isActive ? '#FFFFFF' : '#D0E3FF'}
-      />
+      <View style={[styles.tabIconContainer, isActive && styles.activeTabIconContainer]}>
+        <FontAwesome5 
+          name={icon} 
+          size={22} 
+          color={isActive ? '#FFFFFF' : '#B8D4F1'}
+        />
+      </View>
+      <Text style={[styles.tabLabel, isActive && styles.activeTabLabel]}>
+        {label}
+      </Text>
       {isActive && <View style={styles.activeIndicator} />}
     </TouchableOpacity>
   );
@@ -262,7 +294,7 @@ const finalReportData = {
               buttons={BUTTONS}
               onButtonPress={handleButtonPress}
               onSwitchToAnnouncements={() => setActiveTab('announcements')}
-              onDistressReport={handleDistressReport} // NEW: Add distress call handler
+              onDistressReport={handleDistressReport}
             />
           </View>
         );
@@ -273,6 +305,13 @@ const finalReportData = {
             <Announcements 
               onBack={() => setActiveTab('report')}
             />
+          </View>
+        );
+      
+      case 'chatbot':
+        return (
+          <View style={styles.tabContent}>
+            <AIChatbot />
           </View>
         );
       
@@ -294,35 +333,38 @@ const finalReportData = {
   };
 
   return (
-    <ImageBackground 
-      source={require('./assets/background4.png')} 
-      style={styles.container}
-      resizeMode="cover"
-    >
+    <WaveBackground>
       <SafeAreaView style={styles.safeArea}>
-      
-        
         <View style={styles.contentContainer}>
           {renderTabContent()}
         </View>
 
-        {/* Bottom Tab Navigation - Always visible */}
         <View style={styles.bottomTabNavigation}>
           <TabButton
             tab="report"
             icon="exclamation-triangle"
+            label="Report"
             isActive={activeTab === 'report'}
             onPress={setActiveTab}
           />
           <TabButton
             tab="announcements"
             icon="bullhorn"
+            label="News"
             isActive={activeTab === 'announcements'}
+            onPress={setActiveTab}
+          />
+          <TabButton
+            tab="chatbot"
+            icon="robot"
+            label="AI Help"
+            isActive={activeTab === 'chatbot'}
             onPress={setActiveTab}
           />
           <TabButton
             tab="profile"
             icon="user"
+            label="Profile"
             isActive={activeTab === 'profile'}
             onPress={setActiveTab}
           />
@@ -341,87 +383,89 @@ const finalReportData = {
         visible={successModalVisible}
         onClose={() => setSuccessModalVisible(false)}
       />
-    </ImageBackground>
+    </WaveBackground>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F8F9FA',
-  },
-  backgroundImage: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    top: 0,
-    height: height,
-  },
   safeArea: {
     flex: 1,
+    overflow: 'hidden',
   },
   contentContainer: {
     flex: 1,
+    overflow: 'hidden',
   },
-  // NEW: Specific style for report tab to center the EmergencyGrid
   reportTabContent: {
     flex: 1,
-    justifyContent: 'center', // Centers vertically
-    alignItems: 'center',     // Centers horizontally
+    justifyContent: 'center',
+    alignItems: 'center',
     paddingHorizontal: 20,
-    paddingTop: 10,           // Reduce top padding
-    paddingBottom: 80,        // Add more bottom padding to push content up
-    marginTop: 50,           // Pull content up with negative margin
+    paddingTop: 10,
+    paddingBottom: 80,
+    marginTop: 50,
   },
-  // Keep the original for other tabs
   tabContent: {
     flex: 1,
     paddingHorizontal: 20,
     paddingTop: 20,
   },
-  comingSoonContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 40,
-  },
-  comingSoonText: {
-    fontSize: 16,
-    color: '#7B8794',
-    textAlign: 'center',
-    lineHeight: 24,
-    marginTop: 16,
-  },
   bottomTabNavigation: {
     flexDirection: 'row',
-    backgroundColor: '#4A90E2',
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    shadowColor: 'rgba(0,0,0,0.2)',
+    backgroundColor: '#3A7BC8',
+    paddingVertical: 8,
+    paddingHorizontal: 8,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    shadowColor: '#000',
     shadowOffset: {
       width: 0,
-      height: -2,
+      height: -4,
     },
-    shadowOpacity: 0.15,
-    shadowRadius: 6,
-    elevation: 8,
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 12,
   },
   tabButton: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 4,
     position: 'relative',
+    borderRadius: 16,
+    marginHorizontal: 4,
   },
-  activeTabButton: {},
+  activeTabButton: {
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+  },
+  tabIconContainer: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
+  },
+  activeTabIconContainer: {
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  tabLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#B8D4F1',
+    marginTop: 2,
+  },
+  activeTabLabel: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
   activeIndicator: {
     position: 'absolute',
-    bottom: -6,
-    width: 6,
-    height: 6,
-    borderRadius: 3,
+    top: 4,
+    width: 4,
+    height: 4,
+    borderRadius: 2,
     backgroundColor: '#FFFFFF',
   },
 });

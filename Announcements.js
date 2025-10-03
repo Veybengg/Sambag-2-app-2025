@@ -17,7 +17,7 @@ import {
 import CalendarPicker from 'react-native-calendar-picker';
 import { FontAwesome5 } from '@expo/vector-icons';
 import { db } from './firebase';
-import { collection, query, orderBy, onSnapshot, doc, updateDoc, arrayUnion, arrayRemove, increment } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, doc, updateDoc, arrayUnion, arrayRemove, increment, where } from 'firebase/firestore';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
@@ -49,12 +49,16 @@ export default function Announcements({ onBack }) {
   // Updated state for different data sources
   const [posts, setPosts] = useState([]); // From newsfeeds collection
   const [featuredPosts, setFeaturedPosts] = useState([]); // From systemAnnouncements collection
+  const [allAnnouncements, setAllAnnouncements] = useState([]); // All announcements for Announcements tab
   const [events, setEvents] = useState([]); // From calendarEvents collection
+  const [sponsors, setSponsors] = useState([]); // From sponsors collection
   const [markedDates, setMarkedDates] = useState({});
   
   const [loadingPosts, setLoadingPosts] = useState(true);
   const [loadingEvents, setLoadingEvents] = useState(true);
   const [loadingFeatured, setLoadingFeatured] = useState(true);
+  const [loadingAnnouncements, setLoadingAnnouncements] = useState(true);
+  const [loadingSponsors, setLoadingSponsors] = useState(true);
 
   // Modal states
   const [imageModalVisible, setImageModalVisible] = useState(false);
@@ -64,11 +68,17 @@ export default function Announcements({ onBack }) {
   const [commentsModalVisible, setCommentsModalVisible] = useState(false);
   const [selectedPostId, setSelectedPostId] = useState(null);
   const [selectedPostData, setSelectedPostData] = useState(null);
+  const [hasSeenSponsors, setHasSeenSponsors] = useState(false);
   
-  // NEW: Sponsor modal states
+  // Sponsor modal states
   const [sponsorModalVisible, setSponsorModalVisible] = useState(false);
   const [selectedEventSponsors, setSelectedEventSponsors] = useState([]);
   const [selectedEventDetails, setSelectedEventDetails] = useState(null);
+  
+  // NEW: Sponsor popup states
+  const [sponsorPopupVisible, setSponsorPopupVisible] = useState(false);
+  const [currentSponsorIndex, setCurrentSponsorIndex] = useState(0);
+  const [activeSponsors, setActiveSponsors] = useState([]);
 
   // Comment state
   const [commentText, setCommentText] = useState('');
@@ -82,11 +92,77 @@ export default function Announcements({ onBack }) {
 
   const scrollX = useRef(new Animated.Value(0)).current;
   const carouselRef = useRef(null);
+  const sponsorTimerRef = useRef(null);
 
   // Load current user
   useEffect(() => {
     loadCurrentUser();
   }, []);
+
+ // NEW: Fetch sponsors and filter active ones
+useEffect(() => {
+  const checkSponsorsSeen = async () => {
+    try {
+      const seen = await AsyncStorage.getItem('sponsors_seen_this_session');
+      setHasSeenSponsors(seen === 'true');
+    } catch (error) {
+      console.error('Error checking sponsors seen:', error);
+    }
+  };
+
+  checkSponsorsSeen();
+
+  const q = query(collection(db, 'sponsors'));
+  const unsubscribe = onSnapshot(q, (snapshot) => {
+    const fetchedSponsors = snapshot.docs.map(doc => ({ 
+      id: doc.id, 
+      ...doc.data() 
+    }));
+    
+    // Filter active sponsors (not expired)
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const active = fetchedSponsors.filter(sponsor => {
+      const toDate = new Date(sponsor.toDate);
+      toDate.setHours(0, 0, 0, 0);
+      return toDate >= today;
+    });
+    
+    setSponsors(fetchedSponsors);
+    setActiveSponsors(active);
+    setLoadingSponsors(false);
+  });
+  return () => unsubscribe();
+}, []);
+
+// Show sponsor popup only if not seen this session
+useEffect(() => {
+  if (!loadingSponsors && activeSponsors.length > 0 && !hasSeenSponsors) {
+    setSponsorPopupVisible(true);
+  }
+}, [loadingSponsors, activeSponsors.length, hasSeenSponsors]);
+
+// Clear sponsor seen flag when component unmounts (app close)
+useEffect(() => {
+  return () => {
+    AsyncStorage.removeItem('sponsors_seen_this_session');
+  };
+}, []);
+
+  // NEW: Sponsor rotation timer
+  useEffect(() => {
+    if (sponsorPopupVisible && activeSponsors.length > 0) {
+      sponsorTimerRef.current = setInterval(() => {
+        setCurrentSponsorIndex((prev) => (prev + 1) % activeSponsors.length);
+      }, 5000); // 5 seconds
+
+      return () => {
+        if (sponsorTimerRef.current) {
+          clearInterval(sponsorTimerRef.current);
+        }
+      };
+    }
+  }, [sponsorPopupVisible, activeSponsors.length]);
 
   const getCustomDateStyles = () => {
     const customStyles = [];
@@ -189,8 +265,16 @@ export default function Announcements({ onBack }) {
         comments: doc.data().comments || [],
         commentsCount: doc.data().commentsCount || 0,
       }));
-      setFeaturedPosts(fetchedAnnouncements.slice(0, 5));
+      
+      // Separate featured announcements for carousel
+      const featured = fetchedAnnouncements.filter(a => a.featured);
+      setFeaturedPosts(featured.slice(0, 5));
+      
+      // All announcements for Announcements tab
+      setAllAnnouncements(fetchedAnnouncements);
+      
       setLoadingFeatured(false);
+      setLoadingAnnouncements(false);
     });
     return () => unsubscribe();
   }, []);
@@ -334,7 +418,6 @@ export default function Announcements({ onBack }) {
     .sort((a, b) => new Date(a.date) - new Date(b.date))
     .slice(0, 3);
 
-  // NEW: Function to open event detail modal
   const openEventDetailModal = (event) => {
     setSelectedEventDetails(event);
     setSelectedEventSponsors(event.sponsors || []);
@@ -515,6 +598,71 @@ export default function Announcements({ onBack }) {
     );
   };
 
+  // NEW: Render announcement item (similar to post but for announcements)
+  // NEW: Render announcement item (without like/comment actions)
+const renderAnnouncement = ({ item }) => {
+  const timeAgo = getTimeAgo(item.timestamp?.toDate ? item.timestamp.toDate() : new Date());
+
+  return (
+    <View style={styles.postCard}>
+      <View style={styles.postHeader}>
+        <View style={styles.postAuthor}>
+          <View style={[styles.postAvatar, { backgroundColor: `${COLORS.accent}15` }]}>
+            <FontAwesome5 name="bullhorn" size={16} color={COLORS.accent} />
+          </View>
+          <View style={styles.postAuthorInfo}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Text style={styles.postAuthorName}>Announcement</Text>
+              {item.featured && (
+                <View style={styles.featuredBadge}>
+                  <FontAwesome5 name="star" size={10} color={COLORS.warning} />
+                </View>
+              )}
+            </View>
+            <View style={styles.postMetaRow}>
+              <Text style={styles.postTime}>{timeAgo}</Text>
+              <FontAwesome5 name="globe-americas" size={12} color={COLORS.textLight} style={{ marginLeft: 8 }} />
+            </View>
+          </View>
+        </View>
+      </View>
+
+      <View style={styles.postBody}>
+        <Text style={styles.postTitle}>{item.what}</Text>
+        <View style={styles.announcementDetails}>
+          <View style={styles.announcementDetailRow}>
+            <FontAwesome5 name="map-marker-alt" size={12} color={COLORS.textSecondary} />
+            <Text style={styles.announcementDetailText}>{item.where}</Text>
+          </View>
+          <View style={styles.announcementDetailRow}>
+            <FontAwesome5 name="clock" size={12} color={COLORS.textSecondary} />
+            <Text style={styles.announcementDetailText}>
+              {item.when ? new Date(item.when).toLocaleString('en-US', {
+                month: 'short',
+                day: 'numeric',
+                year: 'numeric',
+                hour: 'numeric',
+                minute: '2-digit',
+                hour12: true
+              }) : 'TBD'}
+            </Text>
+          </View>
+          <View style={styles.announcementDetailRow}>
+            <FontAwesome5 name="users" size={12} color={COLORS.textSecondary} />
+            <Text style={styles.announcementDetailText}>{item.who}</Text>
+          </View>
+        </View>
+      </View>
+
+      {item.image && (
+        <TouchableOpacity onPress={() => { setSelectedImage(item.image); setImageModalVisible(true); }}>
+          <Image source={{ uri: item.image }} style={styles.postImage} />
+        </TouchableOpacity>
+      )}
+    </View>
+  );
+};
+
   const getTimeAgo = (date) => {
     const now = new Date();
     const diffInSeconds = Math.floor((now - date) / 1000);
@@ -557,7 +705,6 @@ export default function Announcements({ onBack }) {
     setEventModalVisible(true);
   };
 
-  // UPDATED: renderEvent - now clickable
   const renderEvent = ({ item }) => (
     <TouchableOpacity 
       onPress={() => openEventDetailModal(item)}
@@ -580,8 +727,7 @@ export default function Announcements({ onBack }) {
         {item.sponsors && item.sponsors.length > 0 && (
           <View style={styles.sponsorBadge}>
             <FontAwesome5 name="handshake" size={10} color={COLORS.primary} />
-            <Text style={styles.sponsorBadgeText}>
-              {item.sponsors.length} Sponsor{item.sponsors.length > 1 ? 's' : ''}
+            <Text style={styles.sponsorBadgeText}>{item.sponsors.length} Sponsor{item.sponsors.length > 1 ? 's' : ''}
             </Text>
           </View>
         )}
@@ -589,7 +735,6 @@ export default function Announcements({ onBack }) {
     </TouchableOpacity>
   );
 
-  // UPDATED: renderUpcomingEvent - now clickable
   const renderUpcomingEvent = ({ item }) => (
     <TouchableOpacity 
       onPress={() => openEventDetailModal(item)}
@@ -631,32 +776,42 @@ export default function Announcements({ onBack }) {
     setCommentsModalVisible(true);
   };
 
-  const TabButton = ({ title, isActive, onPress }) => (
-    <TouchableOpacity
-      style={[styles.tabButton, isActive && styles.activeTab]}
-      onPress={onPress}
-    >
-      <Text style={[styles.tabText, isActive && styles.activeTabText]}>
-        {title}
-      </Text>
-      {isActive && <View style={styles.tabIndicator} />}
-    </TouchableOpacity>
-  );
+  const TabButton = ({ title, icon, isActive, onPress }) => (
+  <TouchableOpacity
+    style={[styles.tabButton, isActive && styles.activeTab]}
+    onPress={onPress}
+  >
+    <FontAwesome5 
+      name={icon} 
+      size={18} 
+      color={isActive ? COLORS.white : COLORS.textSecondary} 
+    />
+    {isActive && <View style={styles.tabIndicator} />}
+  </TouchableOpacity>
+);
 
   return (
     <View style={styles.container}>
       <View style={styles.tabContainer}>
-        <TabButton
-          title="Feed"
-          isActive={activeTab === 'Feed'}
-          onPress={() => setActiveTab('Feed')}
-        />
-        <TabButton
-          title="Events"
-          isActive={activeTab === 'Calendar'}
-          onPress={() => setActiveTab('Calendar')}
-        />
-      </View>
+  <TabButton
+    title="Feed"
+    icon="newspaper"
+    isActive={activeTab === 'Feed'}
+    onPress={() => setActiveTab('Feed')}
+  />
+  <TabButton
+    title="Announcements"
+    icon="bullhorn"
+    isActive={activeTab === 'Announcements'}
+    onPress={() => setActiveTab('Announcements')}
+  />
+  <TabButton
+    title="Events"
+    icon="calendar-alt"
+    isActive={activeTab === 'Calendar'}
+    onPress={() => setActiveTab('Calendar')}
+  />
+</View>
 
       <View style={styles.contentContainer}>
         {activeTab === 'Feed' ? (
@@ -696,6 +851,26 @@ export default function Announcements({ onBack }) {
                   return renderPost({ item });
                 }
               }}
+            />
+          )
+        ) : activeTab === 'Announcements' ? (
+          loadingAnnouncements ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color={COLORS.primary} />
+              <Text style={styles.loadingText}>Loading announcements...</Text>
+            </View>
+          ) : (
+            <FlatList
+              data={allAnnouncements}
+              keyExtractor={(item) => item.id}
+              showsVerticalScrollIndicator={false}
+              renderItem={renderAnnouncement}
+              ListEmptyComponent={() => (
+                <View style={styles.emptyContainer}>
+                  <FontAwesome5 name="bullhorn" size={48} color={COLORS.textLight} />
+                  <Text style={styles.emptyText}>No announcements yet</Text>
+                </View>
+              )}
             />
           )
         ) : loadingEvents ? (
@@ -739,6 +914,71 @@ export default function Announcements({ onBack }) {
           </ScrollView>
         )}
       </View>
+
+      {/* NEW: Sponsor Popup Modal */}
+      <Modal visible={sponsorPopupVisible} transparent={true} animationType="fade">
+        <View style={styles.sponsorPopupContainer}>
+          <View style={styles.sponsorPopupContent}>
+           <TouchableOpacity 
+  style={styles.sponsorPopupClose}
+  onPress={async () => {
+    setSponsorPopupVisible(false);
+    setHasSeenSponsors(true);
+    try {
+      await AsyncStorage.setItem('sponsors_seen_this_session', 'true');
+    } catch (error) {
+      console.error('Error saving sponsor seen status:', error);
+    }
+    if (sponsorTimerRef.current) {
+      clearInterval(sponsorTimerRef.current);
+    }
+  }}
+>
+  <FontAwesome5 name="times" size={20} color={COLORS.textSecondary} />
+</TouchableOpacity>
+
+            {activeSponsors.length > 0 && (
+              <View style={styles.sponsorPopupInner}>
+                <Text style={styles.sponsorPopupTitle}>Our Sponsors</Text>
+                
+                <View style={styles.sponsorPopupImageContainer}>
+                  {activeSponsors[currentSponsorIndex].imageUrl ? (
+                    <Image
+                      source={{ uri: activeSponsors[currentSponsorIndex].imageUrl }}
+                      style={styles.sponsorPopupImage}
+                      resizeMode="contain"
+                    />
+                  ) : (
+                    <View style={styles.sponsorPopupPlaceholder}>
+                      <FontAwesome5 name="handshake" size={60} color={COLORS.textLight} />
+                    </View>
+                  )}
+                </View>
+
+                <Text style={styles.sponsorPopupName}>
+                  {activeSponsors[currentSponsorIndex].name}
+                </Text>
+
+                <View style={styles.sponsorPopupPagination}>
+                  {activeSponsors.map((_, index) => (
+                    <View
+                      key={index}
+                      style={[
+                        styles.sponsorPopupDot,
+                        index === currentSponsorIndex && styles.sponsorPopupDotActive
+                      ]}
+                    />
+                  ))}
+                </View>
+
+                <Text style={styles.sponsorPopupCounter}>
+                  {currentSponsorIndex + 1} / {activeSponsors.length}
+                </Text>
+              </View>
+            )}
+          </View>
+        </View>
+      </Modal>
 
       {/* Comments Modal */}
       <Modal visible={commentsModalVisible} transparent={true} animationType="slide">
@@ -866,7 +1106,7 @@ export default function Announcements({ onBack }) {
         </View>
       </Modal>
 
-      {/* NEW: Event Detail Modal with Sponsors Carousel */}
+      {/* Event Detail Modal with Sponsors Carousel */}
       <Modal visible={sponsorModalVisible} transparent={true} animationType="slide">
         <View style={styles.eventDetailModalContainer}>
           <View style={styles.eventDetailModalContent}>
@@ -979,14 +1219,15 @@ const styles = StyleSheet.create({
     elevation: 4,
     marginBottom: 20,
   },
-  tabButton: {
-    flex: 1,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 12,
-    alignItems: 'center',
-    position: 'relative',
-  },
+ tabButton: {
+  flex: 1,
+  paddingVertical: 14,
+  paddingHorizontal: 16,
+  borderRadius: 12,
+  alignItems: 'center',
+  justifyContent: 'center',
+  position: 'relative',
+},
   activeTab: {
     backgroundColor: COLORS.primary,
   },
@@ -1010,6 +1251,18 @@ const styles = StyleSheet.create({
     paddingVertical: 60,
   },
   loadingText: {
+    marginTop: 12,
+    fontSize: 16,
+    color: COLORS.textSecondary,
+  },
+  
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 60,
+  },
+  emptyText: {
     marginTop: 12,
     fontSize: 16,
     color: COLORS.textSecondary,
@@ -1170,6 +1423,29 @@ const styles = StyleSheet.create({
     width: '100%',
     height: 250,
     backgroundColor: COLORS.surface,
+  },
+  
+  // NEW: Announcement-specific styles
+  featuredBadge: {
+    backgroundColor: `${COLORS.warning}15`,
+    borderRadius: 12,
+    padding: 4,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  announcementDetails: {
+    marginTop: 12,
+    gap: 8,
+  },
+  announcementDetailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  announcementDetailText: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+    flex: 1,
   },
   
   postStats: {
@@ -1606,7 +1882,6 @@ const styles = StyleSheet.create({
     fontSize: 11,
   },
   
-  // NEW: Sponsor Badge Styles
   sponsorBadge: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1624,7 +1899,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   
-  // NEW: Event Detail Modal Styles
   eventDetailModalContainer: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',
@@ -1736,5 +2010,93 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: COLORS.text,
     textAlign: 'center',
+  },
+
+  // NEW: Sponsor Popup Styles
+  sponsorPopupContainer: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  sponsorPopupContent: {
+    backgroundColor: COLORS.white,
+    borderRadius: 20,
+    width: '90%',
+    maxWidth: 400,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  sponsorPopupClose: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    zIndex: 10,
+    padding: 8,
+    backgroundColor: COLORS.surface,
+    borderRadius: 20,
+  },
+  sponsorPopupInner: {
+    alignItems: 'center',
+    paddingTop: 16,
+  },
+  sponsorPopupTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: COLORS.text,
+    marginBottom: 20,
+  },
+  sponsorPopupImageContainer: {
+    width: '100%',
+    height: 200,
+    marginBottom: 16,
+    borderRadius: 12,
+    overflow: 'hidden',
+    backgroundColor: COLORS.surface,
+  },
+  sponsorPopupImage: {
+    width: '100%',
+    height: '100%',
+  },
+  sponsorPopupPlaceholder: {
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: COLORS.surface,
+  },
+  sponsorPopupName: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: COLORS.text,
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  sponsorPopupPagination: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
+  },
+  sponsorPopupDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: COLORS.border,
+  },
+  sponsorPopupDotActive: {
+    backgroundColor: COLORS.primary,
+    width: 24,
+  },
+  sponsorPopupCounter: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    fontWeight: '500',
   },
 });
