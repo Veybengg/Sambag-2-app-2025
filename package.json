@@ -2,12 +2,14 @@
   "name": "sambag2app",
   "version": "1.0.0",
   "main": "index.js",
-  "scripts": {
-    "start": "expo start",
-    "android": "expo run:android",
-    "ios": "expo run:ios",
-    "web": "expo start --web"
-  },
+ "scripts": {
+  "start": "expo start",
+  "android": "expo run:android",
+  "ios": "expo run:ios",
+  "web": "expo start --web",
+  "build:web": "expo build:web",
+  "vercel-build": "npm run build:web"
+},
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
     "@react-native-async-storage/async-storage": "2.2.0",
