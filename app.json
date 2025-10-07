@@ -15,7 +15,8 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/icon.png",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#ffffff",
+        "softwareKeyboardLayoutMode": "pan"
       },
       "edgeToEdgeEnabled": true,
       "config": {

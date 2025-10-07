@@ -1,6 +1,6 @@
 import React, { useState, useCallback, memo, useEffect } from 'react';
 import {
-  View, Text, TextInput, TouchableOpacity, Image, StyleSheet, Alert, ScrollView, Dimensions
+  View, Text, TextInput, TouchableOpacity, Image, StyleSheet, Alert, ScrollView, Dimensions, StatusBar, ImageBackground, KeyboardAvoidingView, Platform, Keyboard
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -18,6 +18,13 @@ import * as Crypto from 'expo-crypto';
 
 const { width, height } = Dimensions.get('window');
 
+// Generate unique user ID
+const generateUserId = () => {
+  const timestamp = Date.now().toString(36);
+  const randomStr = Math.random().toString(36).substring(2, 10);
+  return `USER-${timestamp}-${randomStr}`.toUpperCase();
+};
+
 // Data Privacy Modal Component
 const DataPrivacyModal = memo(({ visible, onAccept, onDecline }) => {
   if (!visible) return null;
@@ -25,187 +32,79 @@ const DataPrivacyModal = memo(({ visible, onAccept, onDecline }) => {
   return (
     <View style={styles.modalOverlay}>
       <View style={styles.privacyModalContainer}>
+        <View style={styles.privacyModalHeader}>
+          <View style={styles.shieldCircle}>
+            <Ionicons name="shield-checkmark" size={40} color="#FFFFFF" />
+          </View>
+          <Text style={styles.privacyModalTitle}>Data Privacy Notice</Text>
+          <Text style={styles.privacyModalSubtitle}>Please read carefully before proceeding</Text>
+        </View>
+
         <ScrollView 
-          style={styles.privacyScrollView}
-          showsVerticalScrollIndicator={true}
+          style={styles.privacyScrollContent}
+          showsVerticalScrollIndicator={false}
         >
-          <View style={styles.privacyHeader}>
-            <Ionicons name="shield-checkmark" size={48} color="#6366F1" />
-            <Text style={styles.privacyTitle}>Data Privacy Notice</Text>
+          <View style={styles.privacySection}>
+            <View style={styles.privacySectionHeader}>
+              <Ionicons name="information-circle" size={22} color="#667eea" />
+              <Text style={styles.privacySectionTitle}>What We Collect</Text>
+            </View>
+            <Text style={styles.privacySectionText}>
+              • Personal Information (Name, Contact){'\n'}
+              • Valid ID for verification{'\n'}
+              • Location data during emergency reports{'\n'}
+              • Emergency report details and photos
+            </Text>
           </View>
 
-          <View style={styles.privacyContent}>
-            <Text style={styles.privacySection}>
-              <Text style={styles.privacySectionTitle}>Welcome to Sambag 2 Emergency Reporting System</Text>
-              {'\n\n'}
-              Before you proceed with registration, please read and understand how we collect, use, and protect your personal information.
+          <View style={styles.privacySection}>
+            <View style={styles.privacySectionHeader}>
+              <Ionicons name="shield-outline" size={22} color="#667eea" />
+              <Text style={styles.privacySectionTitle}>How We Use It</Text>
+            </View>
+            <Text style={styles.privacySectionText}>
+              • Verify you as a Barangay Sambag 2 resident{'\n'}
+              • Process and respond to emergencies{'\n'}
+              • Contact you regarding your reports{'\n'}
+              • Improve emergency response services
             </Text>
+          </View>
 
-            <Text style={styles.privacySection}>
-              <Text style={styles.privacySectionTitle}>Information We Collect:</Text>
-              {'\n\n'}
-              • <Text style={styles.privacyBold}>Personal Information:</Text> Your first name, last name, and contact number
-              {'\n'}
-              • <Text style={styles.privacyBold}>Identification:</Text> A photo of your valid ID for verification purposes
-              {'\n'}
-              • <Text style={styles.privacyBold}>Location Data:</Text> Your real-time location when you submit an emergency report
-              {'\n'}
-              • <Text style={styles.privacyBold}>Photos (Optional):</Text> Images you choose to attach to your emergency reports
-              {'\n'}
-              • <Text style={styles.privacyBold}>Report Details:</Text> Information about the emergency incidents you report
+          <View style={styles.privacySection}>
+            <View style={styles.privacySectionHeader}>
+              <Ionicons name="lock-closed" size={22} color="#667eea" />
+              <Text style={styles.privacySectionTitle}>Data Protection</Text>
+            </View>
+            <Text style={styles.privacySectionText}>
+              • Encrypted database storage{'\n'}
+              • Limited to authorized officials only{'\n'}
+              • No third-party data sharing
             </Text>
+          </View>
 
-            <Text style={styles.privacySection}>
-              <Text style={styles.privacySectionTitle}>How We Use Your Information:</Text>
-              {'\n\n'}
-              • Verify your identity as a resident of Barangay Sambag 2
-              {'\n'}
-              • Process and respond to your emergency reports
-              {'\n'}
-              • Contact you regarding your submitted reports
-              {'\n'}
-              • Locate the emergency incident using your location data
-              {'\n'}
-              • Maintain records for safety and accountability purposes
-              {'\n'}
-              • Improve our emergency response services
-            </Text>
-
-            <Text style={styles.privacySection}>
-              <Text style={styles.privacySectionTitle}>Data Protection:</Text>
-              {'\n\n'}
-              • Your personal information is stored securely in encrypted databases
-              {'\n'}
-              • Access to your data is limited to authorized barangay officials only
-              {'\n'}
-              • Your ID photo is used solely for verification and is not shared with third parties
-              {'\n'}
-              • Location data is only collected when you submit a report
-              {'\n'}
-              • We implement industry-standard security measures to protect your information
-            </Text>
-
-            <Text style={styles.privacySection}>
-              <Text style={styles.privacySectionTitle}>Your Rights:</Text>
-              {'\n\n'}
-              • You have the right to access your personal information
-              {'\n'}
-              • You can request correction of inaccurate data
-              {'\n'}
-              • You may withdraw consent at any time (though this may limit app functionality)
-              {'\n'}
-              • You can request deletion of your account and associated data
-            </Text>
-
-            <Text style={styles.privacySection}>
-              <Text style={styles.privacySectionTitle}>Data Retention:</Text>
-              {'\n\n'}
-              Your personal information and report history will be retained as long as your account is active and for a reasonable period thereafter as required by barangay records management policies.
-            </Text>
-
-            <Text style={styles.privacySection}>
-              <Text style={styles.privacySectionTitle}>Contact Us:</Text>
-              {'\n\n'}
-              If you have questions or concerns about how we handle your data, please contact the Barangay Sambag 2 office.
-            </Text>
-
-            <Text style={styles.privacyFooter}>
-              By clicking "I Accept", you acknowledge that you have read and understood this Data Privacy Notice and consent to the collection, use, and processing of your personal information as described above.
+          <View style={styles.privacyFooterBox}>
+            <Text style={styles.privacyFooterText}>
+              By clicking "Accept", you acknowledge that you have read and consent to the collection and processing of your personal data as described above.
             </Text>
           </View>
         </ScrollView>
 
-        <View style={styles.privacyButtonContainer}>
+        <View style={styles.privacyButtonGroup}>
           <TouchableOpacity
-            style={styles.privacyDeclineButton}
+            style={styles.declineButton}
             onPress={onDecline}
+            activeOpacity={0.8}
           >
-            <Text style={styles.privacyDeclineText}>Decline</Text>
+            <Text style={styles.declineButtonText}>Decline</Text>
           </TouchableOpacity>
           
           <TouchableOpacity
-            style={styles.privacyAcceptButton}
+            style={styles.acceptButton}
             onPress={onAccept}
+            activeOpacity={0.8}
           >
-            <Text style={styles.privacyAcceptText}>I Accept</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    </View>
-  );
-});
-
-// Verification Modal Component
-const VerificationModal = memo(({ 
-  visible, 
-  onClose, 
-  onVerify, 
-  loading 
-}) => {
-  const [localOfficialName, setLocalOfficialName] = useState('');
-
-  const handleVerify = () => {
-    onVerify(localOfficialName);
-  };
-
-  const handleClose = () => {
-    setLocalOfficialName('');
-    onClose();
-  };
-
-  if (!visible) return null;
-
-  return (
-    <View style={styles.modalOverlay}>
-      <View style={styles.modalContainer}>
-        <View style={styles.modalHeader}>
-          <View style={styles.modalIconContainer}>
-            <Ionicons name="shield-checkmark" size={32} color="#6366F1" />
-          </View>
-          <Text style={styles.modalTitle}>Barangay Verification</Text>
-          <Text style={styles.modalSubtitle}>
-            To complete your registration, please name one current barangay or SK official serving in Barangay Sambag 2. You can use their full name, first name, last name, or nickname.
-          </Text>
-        </View>
-        
-        <View style={styles.inputContainer}>
-          <Text style={styles.label}>
-            Official's Name or Nickname
-            <Text style={styles.required}> *</Text>
-          </Text>
-          <View style={styles.inputWrapper}>
-            <Ionicons name="person-outline" size={20} color="#6B7280" style={styles.inputIcon} />
-            <TextInput
-              style={styles.input}
-              placeholder="Enter any official's name or nickname"
-              value={localOfficialName}
-              onChangeText={setLocalOfficialName}
-              placeholderTextColor="#9CA3AF"
-              autoCapitalize="words"
-              blurOnSubmit={false}
-              returnKeyType="done"
-              onSubmitEditing={handleVerify}
-              autoFocus={true}
-            />
-          </View>
-        </View>
-
-        <View style={styles.modalButtonContainer}>
-          <TouchableOpacity
-            style={styles.modalCancelButton}
-            onPress={handleClose}
-          >
-            <Text style={styles.modalCancelText}>Cancel</Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity
-            style={[styles.modalVerifyButton, loading && styles.submitButtonDisabled]}
-            onPress={handleVerify}
-            disabled={loading}
-          >
-            <Text style={styles.modalVerifyText}>
-              {loading ? 'Verifying...' : 'Verify'}
-            </Text>
+            <Ionicons name="checkmark-circle-outline" size={22} color="#FFFFFF" />
+            <Text style={styles.acceptButtonText}>Accept</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -214,10 +113,12 @@ const VerificationModal = memo(({
 });
 
 export default function RegisterScreen({ onRegistered }) {
-  const [mode, setMode] = useState('register');
+  const [isLogin, setIsLogin] = useState(true);
   const [showDataPrivacy, setShowDataPrivacy] = useState(false);
   const [dataPrivacyAccepted, setDataPrivacyAccepted] = useState(false);
-
+  
+  const [registrationStep, setRegistrationStep] = useState(1);
+  
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [contact, setContact] = useState('');
@@ -225,20 +126,20 @@ export default function RegisterScreen({ onRegistered }) {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [idImage, setIdImage] = useState(null);
-  const [loading, setLoading] = useState(false);
+  const [officialName, setOfficialName] = useState('');
   
+  const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   
-  const [showVerification, setShowVerification] = useState(false);
-  const [verificationPassed, setVerificationPassed] = useState(false);
-  const [verificationLoading, setVerificationLoading] = useState(false);
-
   const [usernameError, setUsernameError] = useState('');
   const [checkingUsername, setCheckingUsername] = useState(false);
   const [passwordError, setPasswordError] = useState('');
+  
+  const [loginUsername, setLoginUsername] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
+  const [showLoginPassword, setShowLoginPassword] = useState(false);
 
-  // Check if user has accepted data privacy on component mount
   useEffect(() => {
     const checkDataPrivacyAcceptance = async () => {
       try {
@@ -254,53 +155,52 @@ export default function RegisterScreen({ onRegistered }) {
     checkDataPrivacyAcceptance();
   }, []);
 
-  // Show data privacy modal when in register mode and not accepted
-  useEffect(() => {
-    console.log('Mode:', mode, 'Privacy accepted:', dataPrivacyAccepted, 'Show modal:', showDataPrivacy);
-    if (mode === 'register' && !dataPrivacyAccepted) {
-      setShowDataPrivacy(true);
-    } else {
-      setShowDataPrivacy(false);
-    }
-  }, [mode, dataPrivacyAccepted]);
-
-  const handleAcceptPrivacy = async () => {
-    try {
-      await AsyncStorage.setItem('data_privacy_accepted', 'true');
-      setDataPrivacyAccepted(true);
-      setShowDataPrivacy(false);
-    } catch (error) {
-      console.error('Error saving privacy acceptance:', error);
-      Alert.alert('Error', 'Failed to save privacy acceptance. Please try again.');
-    }
-  };
+const handleAcceptPrivacy = async () => {
+  try {
+    await AsyncStorage.setItem('data_privacy_accepted', 'true');
+    setDataPrivacyAccepted(true);
+    setShowDataPrivacy(false);
+    // NOW switch to register screen AFTER accepting
+    setIsLogin(false);
+    setRegistrationStep(1);
+  } catch (error) {
+    console.error('Error saving privacy acceptance:', error);
+    Alert.alert('Error', 'Failed to save privacy acceptance. Please try again.');
+  }
+};
 
   const handleDeclinePrivacy = () => {
     setShowDataPrivacy(false);
-    setMode('login'); // Switch to login mode if user declines
+    setIsLogin(true);
     Alert.alert(
       'Privacy Policy Required',
-      'You must accept the Data Privacy Notice to register. Switch back to the Register tab if you change your mind.'
+      'You must accept the Data Privacy Notice to register.'
     );
   };
 
-  const pickImage = async (fromCamera = false) => {
-    const permission = fromCamera
-      ? await ImagePicker.requestCameraPermissionsAsync()
-      : await ImagePicker.requestMediaLibraryPermissionsAsync();
+ const switchToRegister = () => {
+  // CRITICAL FIX: Check privacy acceptance FIRST
+  if (!dataPrivacyAccepted) {
+    // Show modal but DON'T switch screens yet
+    setShowDataPrivacy(true);
+    return; // Exit early - don't change isLogin
+  }
+  // Only switch to register if privacy already accepted
+  setIsLogin(false);
+  setRegistrationStep(1);
+};
 
-    if (!permission.granted) {
-      Alert.alert('Permission required', 'Please grant permission to access camera or gallery.');
-      return;
-    }
-
-    const result = fromCamera
-      ? await ImagePicker.launchCameraAsync({ base64: false, quality: 0.7 })
-      : await ImagePicker.launchImageLibraryAsync({ base64: false, quality: 0.7 });
-
-    if (!result.canceled) {
-      setIdImage(result.assets[0].uri);
-    }
+  const switchToLogin = () => {
+    setIsLogin(true);
+    setRegistrationStep(1);
+    setFirstName('');
+    setLastName('');
+    setContact('');
+    setUsername('');
+    setPassword('');
+    setConfirmPassword('');
+    setIdImage(null);
+    setOfficialName('');
   };
 
   const checkUsernameAvailability = useCallback(async (usernameToCheck) => {
@@ -332,7 +232,7 @@ export default function RegisterScreen({ onRegistered }) {
   }, []);
 
   useEffect(() => {
-    if (username && mode === 'register') {
+    if (username && !isLogin) {
       const timeoutId = setTimeout(() => {
         checkUsernameAvailability(username);
       }, 500);
@@ -342,15 +242,34 @@ export default function RegisterScreen({ onRegistered }) {
       setUsernameError('');
       setCheckingUsername(false);
     }
-  }, [username, mode, checkUsernameAvailability]);
+  }, [username, isLogin, checkUsernameAvailability]);
 
   useEffect(() => {
-    if (mode === 'register' && confirmPassword && password !== confirmPassword) {
+    if (!isLogin && confirmPassword && password !== confirmPassword) {
       setPasswordError('Passwords do not match');
     } else {
       setPasswordError('');
     }
-  }, [password, confirmPassword, mode]);
+  }, [password, confirmPassword, isLogin]);
+
+  const pickImage = async (fromCamera = false) => {
+    const permission = fromCamera
+      ? await ImagePicker.requestCameraPermissionsAsync()
+      : await ImagePicker.requestMediaLibraryPermissionsAsync();
+
+    if (!permission.granted) {
+      Alert.alert('Permission required', 'Please grant permission to access camera or gallery.');
+      return;
+    }
+
+    const result = fromCamera
+      ? await ImagePicker.launchCameraAsync({ base64: false, quality: 0.7 })
+      : await ImagePicker.launchImageLibraryAsync({ base64: false, quality: 0.7 });
+
+    if (!result.canceled) {
+      setIdImage(result.assets[0].uri);
+    }
+  };
 
   const hashPassword = async (plainPassword) => {
     try {
@@ -385,34 +304,101 @@ export default function RegisterScreen({ onRegistered }) {
     }
   };
 
-  const verifyBarangayOfficial = useCallback(async (officialName) => {
+  const validateStep = (step) => {
+    switch(step) {
+      case 1:
+        if (!firstName.trim()) {
+          Alert.alert('Required Field', 'Please enter your first name');
+          return false;
+        }
+        if (!lastName.trim()) {
+          Alert.alert('Required Field', 'Please enter your last name');
+          return false;
+        }
+        if (!contact.trim()) {
+          Alert.alert('Required Field', 'Please enter your contact number');
+          return false;
+        }
+        if (contact.length !== 11) {
+          Alert.alert('Invalid Contact', 'Contact number must be exactly 11 digits');
+          return false;
+        }
+        return true;
+      
+      case 2:
+        if (!username.trim()) {
+          Alert.alert('Required Field', 'Please enter a username');
+          return false;
+        }
+        if (usernameError) {
+          Alert.alert('Username Error', usernameError);
+          return false;
+        }
+        if (!password) {
+          Alert.alert('Required Field', 'Please enter a password');
+          return false;
+        }
+        if (password.length < 6) {
+          Alert.alert('Weak Password', 'Password must be at least 6 characters long');
+          return false;
+        }
+        if (!confirmPassword) {
+          Alert.alert('Required Field', 'Please confirm your password');
+          return false;
+        }
+        if (passwordError) {
+          Alert.alert('Password Error', passwordError);
+          return false;
+        }
+        return true;
+      
+      case 3:
+        if (!idImage) {
+          Alert.alert('Required Field', 'Please upload your ID photo');
+          return false;
+        }
+        return true;
+      
+      default:
+        return true;
+    }
+  };
+
+  const handleNextStep = () => {
+    if (validateStep(registrationStep)) {
+      setRegistrationStep(registrationStep + 1);
+    }
+  };
+
+  const handlePreviousStep = () => {
+    if (registrationStep > 1) {
+      setRegistrationStep(registrationStep - 1);
+    }
+  };
+
+  const verifyBarangayOfficial = async () => {
     if (!officialName.trim()) {
-      Alert.alert('Missing Name', 'Please enter a barangay official name or nickname.');
+      Alert.alert('Required Field', 'Please enter a barangay official name or nickname');
       return;
     }
 
-    setVerificationLoading(true);
+    setLoading(true);
     try {
-      // Get user profiles from ManageUsers (userProfiles collection)
       const userProfilesRef = collection(db, 'userProfiles');
       const userProfilesSnapshot = await getDocs(userProfilesRef);
       
-      // Get barangay officials
       const barangayOfficialsRef = collection(db, 'barangay_officials');
       const barangaySnapshot = await getDocs(barangayOfficialsRef);
       
-      // Get SK officials
       const skOfficialsRef = collection(db, 'sk_officials');
       const skSnapshot = await getDocs(skOfficialsRef);
       
       let isValidOfficial = false;
       const inputWords = officialName.toLowerCase().trim().split(/\s+/);
       
-      // Helper function to check if input matches official data
       const checkOfficialMatch = (official) => {
         if (!official.name && !official.firstName && !official.lastName) return false;
         
-        // For barangay_officials and sk_officials (with 'name' field)
         if (official.name) {
           const officialWords = official.name.toLowerCase().split(/\s+/);
           const nameMatch = inputWords.some(inputWord => 
@@ -424,7 +410,6 @@ export default function RegisterScreen({ onRegistered }) {
           if (nameMatch) return true;
         }
         
-        // For userProfiles (with 'firstName' and 'lastName' fields)
         if (official.firstName || official.lastName) {
           const firstName = (official.firstName || '').toLowerCase();
           const lastName = (official.lastName || '').toLowerCase();
@@ -439,7 +424,6 @@ export default function RegisterScreen({ onRegistered }) {
           
           if (nameMatch) return true;
           
-          // Check if input matches first name or last name exactly
           const exactMatch = inputWords.some(inputWord => 
             inputWord === firstName || inputWord === lastName
           );
@@ -447,7 +431,6 @@ export default function RegisterScreen({ onRegistered }) {
           if (exactMatch) return true;
         }
         
-        // Check against nicknames if they exist
         if (official.nicknames && Array.isArray(official.nicknames)) {
           const nicknameMatch = official.nicknames.some(nickname => {
             const nicknameWords = nickname.toLowerCase().split(/\s+/);
@@ -470,7 +453,6 @@ export default function RegisterScreen({ onRegistered }) {
         return false;
       };
       
-      // Check user profiles from ManageUsers
       userProfilesSnapshot.forEach((doc) => {
         const profile = doc.data();
         if (checkOfficialMatch(profile)) {
@@ -478,7 +460,6 @@ export default function RegisterScreen({ onRegistered }) {
         }
       });
       
-      // Check barangay officials if not found in user profiles
       if (!isValidOfficial) {
         barangaySnapshot.forEach((doc) => {
           const official = doc.data();
@@ -488,7 +469,6 @@ export default function RegisterScreen({ onRegistered }) {
         });
       }
       
-      // Check SK officials if still not found
       if (!isValidOfficial) {
         skSnapshot.forEach((doc) => {
           const official = doc.data();
@@ -499,64 +479,22 @@ export default function RegisterScreen({ onRegistered }) {
       }
 
       if (isValidOfficial) {
-        setVerificationPassed(true);
-        setShowVerification(false);
-        Alert.alert('Verification Passed!', 'You can now proceed with registration.');
+        await handleFinalRegistration();
       } else {
         Alert.alert(
           'Verification Failed', 
-          'The name or nickname you entered does not match any current barangay or SK official. Please try again with a different name or nickname.'
+          'The name or nickname you entered does not match any current barangay or SK official. Please try again.'
         );
+        setLoading(false);
       }
     } catch (err) {
       console.error('Verification error:', err);
       Alert.alert('Error', 'Failed to verify official. Please try again.');
+      setLoading(false);
     }
-    setVerificationLoading(false);
-  }, []);
-
-  const startRegistration = () => {
-    if (!dataPrivacyAccepted) {
-      Alert.alert('Privacy Policy Required', 'Please accept the Data Privacy Notice to continue.');
-      setShowDataPrivacy(true);
-      return;
-    }
-
-    if (!firstName || !lastName || !contact || !username || !password || !confirmPassword || !idImage) {
-      Alert.alert('Missing Info', 'Please fill out all fields and upload your ID.');
-      return;
-    }
-
-    if (contact.length !== 11) {
-      Alert.alert('Invalid Contact Number', 'Contact number must be exactly 11 digits.');
-      return;
-    }
-
-    if (usernameError) {
-      Alert.alert('Username Error', usernameError);
-      return;
-    }
-
-    if (passwordError) {
-      Alert.alert('Password Error', passwordError);
-      return;
-    }
-
-    if (password.length < 6) {
-      Alert.alert('Weak Password', 'Password must be at least 6 characters long.');
-      return;
-    }
-
-    if (!verificationPassed) {
-      setShowVerification(true);
-      return;
-    }
-
-    handleRegister();
   };
 
-  const handleRegister = async () => {
-    setLoading(true);
+  const handleFinalRegistration = async () => {
     try {
       const isUsernameAvailable = await checkUsernameAvailability(username);
       if (!isUsernameAvailable) {
@@ -566,6 +504,7 @@ export default function RegisterScreen({ onRegistered }) {
       }
 
       let idImageUrl = null;
+      
       if (idImage) {
         try {
           idImageUrl = await uploadImageToStorage(idImage);
@@ -576,14 +515,19 @@ export default function RegisterScreen({ onRegistered }) {
         }
       }
 
+      const userId = generateUserId();
+      const createdAt = new Date().toISOString();
+
       const hashedPassword = await hashPassword(password);
       const name = `${firstName.trim()} ${lastName.trim()}`;
       const newUser = { 
+        userId,
         name, 
         contact, 
         username: username.trim(), 
         password: hashedPassword,
-        idImage: idImageUrl
+        idImage: idImageUrl,
+        createdAt
       };
       await addDoc(collection(db, 'users'), newUser);
 
@@ -593,7 +537,7 @@ export default function RegisterScreen({ onRegistered }) {
         password: password
       }));
 
-      Alert.alert('Success', 'Registration complete! Your ID has been securely uploaded.');
+      Alert.alert('Success!', `Registration complete!\n\nYour User ID: ${userId}`);
       onRegistered?.();
     } catch (err) {
       console.error(err);
@@ -603,17 +547,17 @@ export default function RegisterScreen({ onRegistered }) {
   };
 
   const handleLogin = async () => {
-    if (!username || !password) {
+    if (!loginUsername || !loginPassword) {
       Alert.alert('Missing Info', 'Please enter both username and password.');
       return;
     }
 
     setLoading(true);
     try {
-      const hashedPassword = await hashPassword(password);
+      const hashedPassword = await hashPassword(loginPassword);
       
       const usersRef = collection(db, 'users');
-      const q = query(usersRef, where('username', '==', username), where('password', '==', hashedPassword));
+      const q = query(usersRef, where('username', '==', loginUsername), where('password', '==', hashedPassword));
       const snapshot = await getDocs(q);
 
       if (!snapshot.empty) {
@@ -623,7 +567,7 @@ export default function RegisterScreen({ onRegistered }) {
         await AsyncStorage.setItem('user_registered', 'true');
         await AsyncStorage.setItem('user_data', JSON.stringify({
           ...user,
-          password: password
+          password: loginPassword
         }));
 
         Alert.alert('Welcome back!', `Hello ${user.name}`);
@@ -638,762 +582,1256 @@ export default function RegisterScreen({ onRegistered }) {
     setLoading(false);
   };
 
-  const getRegisterButtonText = () => {
-    if (loading) return 'Please wait...';
-    if (!verificationPassed) return 'Verify';
-    return 'Create Account';
+  const renderProgressIndicator = () => {
+    const steps = ['Info', 'Account', 'ID', 'Verify'];
+    
+    return (
+      <View style={styles.progressWrapper}>
+        <View style={styles.progressBarContainer}>
+          <View style={[styles.progressBar, { width: `${(registrationStep / 4) * 100}%` }]} />
+        </View>
+        <View style={styles.progressSteps}>
+          {steps.map((label, index) => {
+            const stepNumber = index + 1;
+            const isActive = stepNumber === registrationStep;
+            const isCompleted = stepNumber < registrationStep;
+            
+            return (
+              <View key={stepNumber} style={styles.progressStepItem}>
+                <View style={[
+                  styles.stepCircle,
+                  isActive && styles.stepCircleActive,
+                  isCompleted && styles.stepCircleCompleted
+                ]}>
+                  {isCompleted ? (
+                    <Ionicons name="checkmark" size={16} color="#FFFFFF" />
+                  ) : (
+                    <Text style={[
+                      styles.stepNumber,
+                      isActive && styles.stepNumberActive
+                    ]}>
+                      {stepNumber}
+                    </Text>
+                  )}
+                </View>
+                <Text style={[
+                  styles.stepLabel,
+                  isActive && styles.stepLabelActive
+                ]}>
+                  {label}
+                </Text>
+              </View>
+            );
+          })}
+        </View>
+      </View>
+    );
   };
 
-  return (
-    <View style={styles.container}>
-      <View style={styles.gradientBackground} />
-      
-      <ScrollView 
-        contentContainerStyle={styles.scrollContainer}
-        showsVerticalScrollIndicator={false}
-      >
-        <View style={styles.headerContainer}>
-          <View style={styles.logoContainer}>
-            <Image
-              source={require("./assets/sambaglogo.png")}
-              style={styles.logo}
-              resizeMode="contain"
-            />
-          </View>
-          <Text style={styles.appName}>Sambag 2</Text>
-          <Text style={styles.appSubtitle}>Emergency Reporting System</Text>
-        </View>
+  const renderStepContent = () => {
+    switch(registrationStep) {
+      case 1:
+        return (
+          <View style={styles.stepWrapper}>
+            <View style={styles.stepHeaderSection}>
+              <Text style={styles.stepMainTitle}>Personal Information</Text>
+              <Text style={styles.stepDescription}>Tell us about yourself</Text>
+            </View>
 
-        <View style={styles.modeToggleContainer}>
-          <TouchableOpacity 
-            style={[styles.modeToggle, mode === 'register' && styles.activeModeToggle]}
-            onPress={() => setMode('register')}
-          >
-            <Text style={[styles.modeToggleText, mode === 'register' && styles.activeModeToggleText]}>
-              Register
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity 
-            style={[styles.modeToggle, mode === 'login' && styles.activeModeToggle]}
-            onPress={() => setMode('login')}
-          >
-            <Text style={[styles.modeToggleText, mode === 'login' && styles.activeModeToggleText]}>
-              Login
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.formCard}>
-          <Text style={styles.formTitle}>
-            {mode === 'register' ? 'Create Your Account' : 'Welcome Back!'}
-          </Text>
-          <Text style={styles.formSubtitle}>
-            {mode === 'register' 
-              ? 'Join our emergency response community' 
-              : 'Sign in to your account'}
-          </Text>
-
-          {mode === 'register' && (
-            <>
-              <View style={styles.nameRowContainer}>
-                <View style={styles.nameInputContainer}>
-                  <Text style={styles.label}>
-                    First Name
-                    <Text style={styles.required}> *</Text>
-                  </Text>
-                  <View style={styles.inputWrapper}>
-                    <Ionicons name="person-outline" size={20} color="#6B7280" style={styles.inputIcon} />
-                    <TextInput
-                      style={styles.input}
-                      placeholder="First name"
-                      value={firstName}
-                      onChangeText={setFirstName}
-                      placeholderTextColor="#9CA3AF"
-                      autoCapitalize="words"
-                    />
-                  </View>
-                </View>
-
-                <View style={styles.nameInputContainer}>
-                  <Text style={styles.label}>
-                    Last Name
-                    <Text style={styles.required}> *</Text>
-                  </Text>
-                  <View style={styles.inputWrapper}>
-                    <Ionicons name="person-outline" size={20} color="#6B7280" style={styles.inputIcon} />
-                    <TextInput
-                      style={styles.input}
-                      placeholder="Last name"
-                      value={lastName}
-                      onChangeText={setLastName}
-                      placeholderTextColor="#9CA3AF"
-                      autoCapitalize="words"
-                    />
-                  </View>
-                </View>
-              </View>
-
+            <View style={styles.formGroup}>
+              <Text style={styles.fieldLabel}>
+                First Name <Text style={styles.asterisk}>*</Text>
+              </Text>
               <View style={styles.inputContainer}>
-                <Text style={styles.label}>
-                  Contact Number
-                  <Text style={styles.required}> *</Text>
+                <Ionicons name="person" size={20} color="#667eea" style={styles.icon} />
+                <TextInput
+                  style={styles.fieldInput}
+                  placeholder="Enter your first name"
+                  value={firstName}
+                  onChangeText={setFirstName}
+                  placeholderTextColor="#A0AEC0"
+                  autoCapitalize="words"
+                />
+              </View>
+            </View>
+
+            <View style={styles.formGroup}>
+              <Text style={styles.fieldLabel}>
+                Last Name <Text style={styles.asterisk}>*</Text>
+              </Text>
+              <View style={styles.inputContainer}>
+                <Ionicons name="person" size={20} color="#667eea" style={styles.icon} />
+                <TextInput
+                  style={styles.fieldInput}
+                  placeholder="Enter your last name"
+                  value={lastName}
+                  onChangeText={setLastName}
+                  placeholderTextColor="#A0AEC0"
+                  autoCapitalize="words"
+                />
+              </View>
+            </View>
+
+            <View style={styles.formGroup}>
+              <Text style={styles.fieldLabel}>
+                Contact Number <Text style={styles.asterisk}>*</Text>
+              </Text>
+              <View style={styles.inputContainer}>
+                <Ionicons name="call" size={20} color="#667eea" style={styles.icon} />
+                <TextInput
+                  style={styles.fieldInput}
+                  placeholder="09XXXXXXXXX"
+                  value={contact}
+                  onChangeText={(text) => {
+                    const numericText = text.replace(/[^0-9]/g, '');
+                    if (numericText.length <= 11) {
+                      setContact(numericText);
+                    }
+                  }}
+                  keyboardType="phone-pad"
+                  placeholderTextColor="#A0AEC0"
+                  maxLength={11}
+                />
+              </View>
+              {contact.length > 0 && contact.length < 11 && (
+                <Text style={styles.fieldHint}>
+                  {contact.length}/11 digits entered
                 </Text>
-                <View style={styles.inputWrapper}>
-                  <Ionicons name="call-outline" size={20} color="#6B7280" style={styles.inputIcon} />
-                  <TextInput
-                    style={styles.input}
-                    placeholder="Enter your 11-digit contact number"
-                    value={contact}
-                    onChangeText={(text) => {
-                      const numericText = text.replace(/[^0-9]/g, '');
-                      if (numericText.length <= 11) {
-                        setContact(numericText);
-                      }
-                    }}
-                    keyboardType="phone-pad"
-                    placeholderTextColor="#9CA3AF"
-                    maxLength={11}
-                  />
-                </View>
-                {contact.length > 0 && contact.length < 11 && (
-                  <Text style={styles.validationText}>
-                    Contact number must be exactly 11 digits ({contact.length}/11)
-                  </Text>
+              )}
+            </View>
+          </View>
+        );
+
+      case 2:
+        return (
+          <View style={styles.stepWrapper}>
+            <View style={styles.stepHeaderSection}>
+              <Text style={styles.stepMainTitle}>Account Setup</Text>
+              <Text style={styles.stepDescription}>Create your credentials</Text>
+            </View>
+
+            <View style={styles.formGroup}>
+              <Text style={styles.fieldLabel}>
+                Username <Text style={styles.asterisk}>*</Text>
+              </Text>
+              <View style={[styles.inputContainer, usernameError && styles.inputError]}>
+                <Ionicons name="at" size={20} color="#667eea" style={styles.icon} />
+                <TextInput
+                  style={styles.fieldInput}
+                  placeholder="Choose a unique username"
+                  value={username}
+                  onChangeText={setUsername}
+                  autoCapitalize="none"
+                  placeholderTextColor="#A0AEC0"
+                />
+                {checkingUsername && (
+                  <Ionicons name="sync" size={18} color="#A0AEC0" />
+                )}
+                {!checkingUsername && username && !usernameError && (
+                  <Ionicons name="checkmark-circle" size={20} color="#10B981" />
                 )}
               </View>
-            </>
-          )}
-
-          <View style={styles.inputContainer}>
-            <Text style={styles.label}>
-              Username
-              <Text style={styles.required}> *</Text>
-            </Text>
-            <View style={[styles.inputWrapper, usernameError && styles.inputWrapperError]}>
-              <Ionicons name="person-circle-outline" size={20} color="#6B7280" style={styles.inputIcon} />
-              <TextInput
-                style={styles.input}
-                placeholder="Enter your username"
-                value={username}
-                onChangeText={setUsername}
-                autoCapitalize="none"
-                placeholderTextColor="#9CA3AF"
-              />
-              {checkingUsername && (
-                <Ionicons name="refresh-outline" size={20} color="#6B7280" style={styles.loadingIcon} />
-              )}
-              {!checkingUsername && username && !usernameError && mode === 'register' && (
-                <Ionicons name="checkmark-circle" size={20} color="#10B981" />
+              {usernameError && (
+                <Text style={styles.fieldError}>{usernameError}</Text>
               )}
             </View>
-            {usernameError && mode === 'register' && (
-              <Text style={styles.errorText}>{usernameError}</Text>
-            )}
-          </View>
 
-          <View style={styles.inputContainer}>
-            <Text style={styles.label}>
-              Password
-              <Text style={styles.required}> *</Text>
-            </Text>
-            <View style={styles.inputWrapper}>
-              <Ionicons name="lock-closed-outline" size={20} color="#6B7280" style={styles.inputIcon} />
-              <TextInput
-                style={styles.input}
-                placeholder="Enter your password"
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry={!showPassword}
-                placeholderTextColor="#9CA3AF"
-              />
-              <TouchableOpacity
-                onPress={() => setShowPassword(!showPassword)}
-                style={styles.eyeButton}
-              >
-                <Ionicons 
-                  name={showPassword ? "eye-outline" : "eye-off-outline"} 
-                  size={20} 
-                  color="#6B7280" 
-                />
-              </TouchableOpacity>
-            </View>
-            {mode === 'register' && password.length > 0 && password.length < 6 && (
-              <Text style={styles.validationText}>
-                Password must be at least 6 characters long
+            <View style={styles.formGroup}>
+              <Text style={styles.fieldLabel}>
+                Password <Text style={styles.asterisk}>*</Text>
               </Text>
-            )}
-          </View>
-
-          {mode === 'register' && (
-            <>
               <View style={styles.inputContainer}>
-                <Text style={styles.label}>
-                  Confirm Password
-                  <Text style={styles.required}> *</Text>
-                </Text>
-                <View style={[styles.inputWrapper, passwordError && styles.inputWrapperError]}>
-                  <Ionicons name="lock-closed-outline" size={20} color="#6B7280" style={styles.inputIcon} />
-                  <TextInput
-                    style={styles.input}
-                    placeholder="Confirm your password"
-                    value={confirmPassword}
-                    onChangeText={setConfirmPassword}
-                    secureTextEntry={!showConfirmPassword}
-                    placeholderTextColor="#9CA3AF"
+                <Ionicons name="lock-closed" size={20} color="#667eea" style={styles.icon} />
+                <TextInput
+                  style={styles.fieldInput}
+                  placeholder="Create a strong password"
+                  value={password}
+                  onChangeText={setPassword}
+                  secureTextEntry={!showPassword}
+                  placeholderTextColor="#A0AEC0"
+                />
+                <TouchableOpacity onPress={() => setShowPassword(!showPassword)} activeOpacity={0.7}>
+                  <Ionicons 
+                    name={showPassword ? "eye" : "eye-off"} 
+                    size={20} 
+                    color="#A0AEC0" 
                   />
-                  <TouchableOpacity
-                    onPress={() => setShowConfirmPassword(!showConfirmPassword)}
-                    style={styles.eyeButton}
+                </TouchableOpacity>
+              </View>
+              {password.length > 0 && password.length < 6 && (
+                <Text style={styles.fieldHint}>
+                  Minimum 6 characters required
+                </Text>
+              )}
+            </View>
+
+            <View style={styles.formGroup}>
+              <Text style={styles.fieldLabel}>
+                Confirm Password <Text style={styles.asterisk}>*</Text>
+              </Text>
+              <View style={[styles.inputContainer, passwordError && styles.inputError]}>
+                <Ionicons name="lock-closed" size={20} color="#667eea" style={styles.icon} />
+                <TextInput
+                  style={styles.fieldInput}
+                  placeholder="Re-enter your password"
+                  value={confirmPassword}
+                  onChangeText={setConfirmPassword}
+                  secureTextEntry={!showConfirmPassword}
+                  placeholderTextColor="#A0AEC0"
+                />
+                <TouchableOpacity onPress={() => setShowConfirmPassword(!showConfirmPassword)} activeOpacity={0.7}>
+                  <Ionicons 
+                    name={showConfirmPassword ? "eye" : "eye-off"} 
+                    size={20} 
+                    color="#A0AEC0" 
+                  />
+                </TouchableOpacity>
+              </View>
+              {passwordError && (
+                <Text style={styles.fieldError}>{passwordError}</Text>
+              )}
+              {!passwordError && confirmPassword && password === confirmPassword && (
+                <Text style={styles.fieldSuccess}>✓ Passwords match</Text>
+              )}
+            </View>
+          </View>
+        );
+
+      case 3:
+        return (
+          <View style={styles.stepWrapper}>
+            <View style={styles.stepHeaderSection}>
+              <Text style={styles.stepMainTitle}>ID Verification</Text>
+              <Text style={styles.stepDescription}>Upload a clear photo of your valid ID</Text>
+            </View>
+
+            {!idImage ? (
+              <View style={styles.uploadContainer}>
+                <View style={styles.uploadPlaceholder}>
+                  <Ionicons name="card-outline" size={60} color="#667eea" />
+                  <Text style={styles.uploadTitle}>Upload Your ID</Text>
+                  <Text style={styles.uploadSubtitle}>
+                    We need this to verify your identity
+                  </Text>
+                </View>
+
+                <View style={styles.uploadButtons}>
+                  <TouchableOpacity 
+                    style={styles.uploadBtn}
+                    onPress={() => pickImage(true)}
+                    activeOpacity={0.8}
                   >
-                    <Ionicons 
-                      name={showConfirmPassword ? "eye-outline" : "eye-off-outline"} 
-                      size={20} 
-                      color="#6B7280" 
-                    />
+                    <Ionicons name="camera" size={26} color="#667eea" />
+                    <Text style={styles.uploadBtnText}>Take Photo</Text>
+                  </TouchableOpacity>
+                  
+                  <TouchableOpacity 
+                    style={styles.uploadBtn}
+                    onPress={() => pickImage(false)}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons name="images" size={26} color="#667eea" />
+                    <Text style={styles.uploadBtnText}>From Gallery</Text>
                   </TouchableOpacity>
                 </View>
-                {passwordError && (
-                  <Text style={styles.errorText}>{passwordError}</Text>
-                )}
-                {!passwordError && confirmPassword && password === confirmPassword && (
-                  <Text style={styles.successText}>Passwords match!</Text>
-                )}
               </View>
-
-              <View style={styles.inputContainer}>
-                <Text style={styles.label}>
-                  ID Photo
-                  <Text style={styles.required}> *</Text>
-                </Text>
-                <Text style={styles.labelSubtext}>Upload a clear photo of your ID for verification</Text>
-                
-                {!idImage ? (
-                  <View style={styles.imageUploadContainer}>
-                    <TouchableOpacity 
-                      style={styles.imageUploadButton} 
-                      onPress={() => pickImage(true)}
-                    >
-                      <Ionicons name="camera-outline" size={24} color="#6366F1" />
-                      <Text style={styles.imageUploadText}>Take Photo</Text>
-                    </TouchableOpacity>
-                    
-                    <TouchableOpacity 
-                      style={styles.imageUploadButton} 
-                      onPress={() => pickImage(false)}
-                    >
-                      <Ionicons name="image-outline" size={24} color="#6366F1" />
-                      <Text style={styles.imageUploadText}>From Gallery</Text>
-                    </TouchableOpacity>
-                  </View>
-                ) : (
-                  <View style={styles.imagePreviewContainer}>
-                    <Image source={{ uri: idImage }} style={styles.imagePreview} />
-                    <TouchableOpacity 
-                      style={styles.changeImageButton}
-                      onPress={() => setIdImage(null)}
-                    >
-                      <Ionicons name="refresh-outline" size={16} color="#FFFFFF" style={{ marginRight: 5 }} />
-                      <Text style={styles.changeImageText}>Change Image</Text>
-                    </TouchableOpacity>
-                  </View>
-                )}
+            ) : (
+              <View style={styles.imagePreview}>
+                <Image source={{ uri: idImage }} style={styles.uploadedImage} />
+                <TouchableOpacity 
+                  style={styles.changeImageBtn}
+                  onPress={() => setIdImage(null)}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="refresh" size={18} color="#FFFFFF" />
+                  <Text style={styles.changeImageText}>Change Photo</Text>
+                </TouchableOpacity>
               </View>
-            </>
-          )}
+            )}
+          </View>
+        );
 
-          {mode === 'register' && (
-            <View style={[styles.verificationStatus, verificationPassed && styles.verificationPassed]}>
-              <Ionicons 
-                name={verificationPassed ? "checkmark-circle" : "alert-circle-outline"} 
-                size={20} 
-                color={verificationPassed ? "#10B981" : "#F59E0B"} 
-                style={{ marginRight: 8 }}
-              />
-              <Text style={[styles.verificationStatusText, verificationPassed && styles.verificationPassedText]}>
-                Barangay Verification: {verificationPassed ? 'Completed' : 'Required'}
-              </Text>
+      case 4:
+        return (
+          <View style={styles.stepWrapper}>
+            <View style={styles.stepHeaderSection}>
+              <View style={styles.verificationIcon}>
+                <Ionicons name="shield-checkmark" size={40} color="#FFFFFF" />
+              </View>
+              <Text style={styles.stepMainTitle}>Barangay Verification</Text>
+              <Text style={styles.stepDescription}>One last step to complete</Text>
             </View>
-          )}
 
-          <TouchableOpacity
-            style={[styles.submitButton, loading && styles.submitButtonDisabled]}
-            onPress={mode === 'register' ? startRegistration : handleLogin}
-            disabled={loading}
+            <View style={styles.verificationBox}>
+              <Text style={styles.verificationQuestion}>
+                Who are the officers in Sambag 2?
+              </Text>
+              <Text style={styles.verificationHint}>
+                Name any current barangay or SK official (full name or nickname)
+              </Text>
+              
+              <View style={styles.formGroup}>
+                <View style={styles.inputContainer}>
+                  <Ionicons name="people" size={20} color="#667eea" style={styles.icon} />
+                  <TextInput
+                    style={styles.fieldInput}
+                    placeholder="Enter official's name or nickname"
+                    value={officialName}
+                    onChangeText={setOfficialName}
+                    placeholderTextColor="#A0AEC0"
+                    autoCapitalize="words"
+                  />
+                </View>
+              </View>
+            </View>
+
+            <View style={styles.reviewBox}>
+              <Text style={styles.reviewTitle}>Review Your Information</Text>
+              
+              <View style={styles.reviewRow}>
+                <View style={styles.reviewIconCircle}>
+                  <Ionicons name="person" size={18} color="#667eea" />
+                </View>
+                <View style={styles.reviewContent}>
+                  <Text style={styles.reviewLabel}>Full Name</Text>
+                  <Text style={styles.reviewValue}>{firstName} {lastName}</Text>
+                </View>
+              </View>
+
+              <View style={styles.reviewRow}>
+                <View style={styles.reviewIconCircle}>
+                  <Ionicons name="call" size={18} color="#667eea" />
+                </View>
+                <View style={styles.reviewContent}>
+                  <Text style={styles.reviewLabel}>Contact Number</Text>
+                  <Text style={styles.reviewValue}>{contact}</Text>
+                </View>
+              </View>
+
+              <View style={styles.reviewRow}>
+                <View style={styles.reviewIconCircle}>
+                  <Ionicons name="at" size={18} color="#667eea" />
+                </View>
+                <View style={styles.reviewContent}>
+                  <Text style={styles.reviewLabel}>Username</Text>
+                  <Text style={styles.reviewValue}>{username}</Text>
+                </View>
+              </View>
+
+              <View style={styles.reviewRow}>
+                <View style={styles.reviewIconCircle}>
+                  <Ionicons name="checkmark-circle" size={18} color="#10B981" />
+                </View>
+                <View style={styles.reviewContent}>
+                  <Text style={styles.reviewLabel}>ID Document</Text>
+                  <Text style={styles.reviewValue}>Uploaded ✓</Text>
+                </View>
+              </View>
+
+              <View style={[styles.reviewRow, { borderBottomWidth: 0 }]}>
+                <View style={styles.reviewIconCircle}>
+                  <Ionicons name="calendar" size={18} color="#667eea" />
+                </View>
+                <View style={styles.reviewContent}>
+                  <Text style={styles.reviewLabel}>Registration Date</Text>
+                  <Text style={styles.reviewValue}>
+                    {new Date().toLocaleDateString('en-US', { 
+                      month: 'short', 
+                      day: 'numeric', 
+                      year: 'numeric' 
+                    })}
+                  </Text>
+                </View>
+              </View>
+            </View>
+          </View>
+        );
+
+      default:
+        return null;
+    }
+  };
+
+ return (
+<KeyboardAvoidingView 
+  style={styles.container}
+  behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+  keyboardVerticalOffset={0}
+>
+      {isLogin ? (
+        // Login Screen
+        <>
+          <StatusBar barStyle="light-content" backgroundColor="rgba(102, 126, 234, 0.9)" />
+          <ImageBackground
+            source={require('./assets/brgysambag.jpg')}
+            style={styles.backgroundImage}
+            resizeMode="cover"
           >
-            <Text style={styles.submitButtonText}>
-              {mode === 'register' ? getRegisterButtonText() : (loading ? 'Please wait...' : 'Sign In')}
-            </Text>
-          </TouchableOpacity>
-        </View>
+            <View style={styles.overlay} />
+            
+<ScrollView 
+  contentContainerStyle={styles.scrollContent}
+  showsVerticalScrollIndicator={false}
+  keyboardShouldPersistTaps="handled"
+  onScrollBeginDrag={Keyboard.dismiss}
+  contentInsetAdjustmentBehavior="automatic"
+>
+              {/* All your login screen content */}
+              <View style={styles.logoSection}>
+                <View style={styles.logoWrapper}>
+                  <Image
+                    source={require("./assets/sambaglogo.png")}
+                    style={styles.logoImage}
+                    resizeMode="contain"
+                  />
+                </View>
+                <Text style={styles.brandName}>Sambag 2</Text>
+                <Text style={styles.brandTagline}>Emergency Response System</Text>
+              </View>
 
-        <View style={{ height: 30 }} />
-      </ScrollView>
+              <View style={styles.loginFormCard}>
+                <Text style={styles.welcomeText}>Welcome Back!</Text>
+                <Text style={styles.welcomeSubtext}>Sign in to your account</Text>
 
-      {/* Data Privacy Modal */}
+                <View style={styles.formGroup}>
+                  <Text style={styles.fieldLabel}>Username</Text>
+                  <View style={styles.inputContainer}>
+                    <Ionicons name="person" size={20} color="#667eea" style={styles.icon} />
+                    <TextInput
+                      style={styles.fieldInput}
+                      placeholder="Enter your username"
+                      value={loginUsername}
+                      onChangeText={setLoginUsername}
+                      autoCapitalize="none"
+                      placeholderTextColor="#A0AEC0"
+                    />
+                  </View>
+                </View>
+
+                <View style={styles.formGroup}>
+                  <Text style={styles.fieldLabel}>Password</Text>
+                  <View style={styles.inputContainer}>
+                    <Ionicons name="lock-closed" size={20} color="#667eea" style={styles.icon} />
+                    <TextInput
+                      style={styles.fieldInput}
+                      placeholder="Enter your password"
+                      value={loginPassword}
+                      onChangeText={setLoginPassword}
+                      secureTextEntry={!showLoginPassword}
+                      placeholderTextColor="#A0AEC0"
+                    />
+                    <TouchableOpacity onPress={() => setShowLoginPassword(!showLoginPassword)} activeOpacity={0.7}>
+                      <Ionicons 
+                        name={showLoginPassword ? "eye" : "eye-off"} 
+                        size={20} 
+                        color="#A0AEC0" 
+                      />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                <TouchableOpacity
+                  style={[styles.primaryBtn, loading && styles.btnDisabled]}
+                  onPress={handleLogin}
+                  disabled={loading}
+                  activeOpacity={0.8}
+                >
+                  {loading ? (
+                    <Text style={styles.primaryBtnText}>Signing in...</Text>
+                  ) : (
+                    <>
+                      <Text style={styles.primaryBtnText}>Sign In</Text>
+                      <Ionicons name="arrow-forward" size={20} color="#FFFFFF" />
+                    </>
+                  )}
+                </TouchableOpacity>
+
+                <View style={styles.separatorContainer}>
+                  <View style={styles.separatorLine} />
+                  <Text style={styles.separatorText}>or</Text>
+                  <View style={styles.separatorLine} />
+                </View>
+
+                <TouchableOpacity
+                  style={styles.secondaryBtn}
+                  onPress={switchToRegister}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="person-add" size={20} color="#667eea" />
+                  <Text style={styles.secondaryBtnText}>Create New Account</Text>
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
+          </ImageBackground>
+        </>
+      ) : (
+        // Register Screen
+        <>
+          <StatusBar barStyle="light-content" backgroundColor="rgba(102, 126, 234, 0.9)" />
+          <ImageBackground
+            source={require('./assets/brgysambag.jpg')}
+            style={styles.backgroundImage}
+            resizeMode="cover"
+          >
+            <View style={styles.overlay} />
+            
+<ScrollView 
+  contentContainerStyle={styles.registerScrollContent}
+  showsVerticalScrollIndicator={false}
+  keyboardShouldPersistTaps="handled"
+  onScrollBeginDrag={Keyboard.dismiss}
+  contentInsetAdjustmentBehavior="automatic"
+>
+              {/* All your register screen content */}
+              <View style={styles.registerTopBar}>
+                <TouchableOpacity 
+                  style={styles.backIconBtn}
+                  onPress={switchToLogin}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
+                </TouchableOpacity>
+                <View style={styles.topBarInfo}>
+                  <Text style={styles.topBarTitle}>Create Account</Text>
+                  <Text style={styles.topBarStep}>Step {registrationStep} of 4</Text>
+                </View>
+              </View>
+
+              {renderProgressIndicator()}
+
+              <View style={styles.registerFormCard}>
+                {renderStepContent()}
+
+                <View style={styles.actionButtons}>
+                  {registrationStep > 1 && (
+                    <TouchableOpacity
+                      style={styles.backBtn}
+                      onPress={handlePreviousStep}
+                      activeOpacity={0.8}
+                    >
+                      <Ionicons name="chevron-back" size={20} color="#667eea" />
+                      <Text style={styles.backBtnText}>Back</Text>
+                    </TouchableOpacity>
+                  )}
+
+                  {registrationStep < 4 ? (
+                    <TouchableOpacity
+                      style={[styles.continueBtn, registrationStep === 1 && styles.continueBtnFull]}
+                      onPress={handleNextStep}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={styles.continueBtnText}>Continue</Text>
+                      <Ionicons name="chevron-forward" size={20} color="#FFFFFF" />
+                    </TouchableOpacity>
+                  ) : (
+                    <TouchableOpacity
+                      style={[styles.finishBtn, loading && styles.btnDisabled]}
+                      onPress={verifyBarangayOfficial}
+                      disabled={loading}
+                      activeOpacity={0.8}
+                    >
+                      {loading ? (
+                        <Text style={styles.finishBtnText}>Verifying...</Text>
+                      ) : (
+                        <>
+                          <Text style={styles.finishBtnText}>Register</Text>
+                          <Ionicons name="checkmark-circle" size={22} color="#FFFFFF" />
+                        </>
+                      )}
+                    </TouchableOpacity>
+                  )}
+                </View>
+              </View>
+            </ScrollView>
+          </ImageBackground>
+        </>
+      )}
+
+      {/* Data Privacy Modal - Now renders on BOTH screens */}
       <DataPrivacyModal
         visible={showDataPrivacy}
         onAccept={handleAcceptPrivacy}
         onDecline={handleDeclinePrivacy}
       />
-
-      {/* Verification Modal */}
-      <VerificationModal
-        visible={showVerification}
-        onClose={() => setShowVerification(false)}
-        onVerify={verifyBarangayOfficial}
-        loading={verificationLoading}
-      />
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
   },
-  gradientBackground: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    top: 0,
-    height: height,
-    backgroundColor: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+  backgroundImage: {
+    flex: 1,
+    width: '100%',
+    height: '100%',
   },
-  scrollContainer: {
+  overlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(102, 126, 234, 0.85)',
+  },
+  scrollContent: {
     flexGrow: 1,
-    paddingHorizontal: 24,
-    paddingTop: 60,
+    paddingHorizontal: 20,
+    paddingTop: 40,
+    paddingBottom: 40,
+    justifyContent: 'center',
   },
-  headerContainer: {
+  registerScrollContent: {
+    flexGrow: 1,
+    paddingHorizontal: 20,
+    paddingTop: 40,
+    paddingBottom: 40,
+  },
+  logoSection: {
     alignItems: 'center',
-    marginBottom: 40,
+    marginBottom: 50,
   },
-  logoContainer: {
-    width: 100,
-    height: 100,
+  logoWrapper: {
+    width: 80,
+    height: 80,
     borderRadius: 50,
     backgroundColor: '#FFFFFF',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 5,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.15,
-    shadowRadius: 16,
-    elevation: 12,
-  },
-  logo: {
-    width: 80,
-    height: 80,
-  },
-  appName: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: '#1F2937',
-    textAlign: 'center',
-    marginBottom: 8,
-  },
-  appSubtitle: {
-    fontSize: 16,
-    color: '#6B7280',
-    textAlign: 'center',
-    fontWeight: '500',
-  },
-  modeToggleContainer: {
-    flexDirection: 'row',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 4,
-    marginBottom: 32,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 6,
-  },
-  modeToggle: {
-    flex: 1,
-    paddingVertical: 14,
-    borderRadius: 12,
-    alignItems: 'center',
-  },
-  activeModeToggle: {
-    backgroundColor: '#6366F1',
-    shadowColor: '#6366F1',
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 4,
+    shadowRadius: 20,
+    elevation: 15,
   },
-  modeToggleText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#6B7280',
+  logoImage: {
+    width: 75,
+    height: 75,
   },
-  activeModeToggleText: {
+  brandName: {
+    fontSize: 38,
+    fontWeight: '800',
     color: '#FFFFFF',
+    marginBottom: 6,
+    letterSpacing: 1,
+    textShadowColor: 'rgba(0, 0, 0, 0.3)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 4,
   },
-  formCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 24,
-    padding: 32,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.15,
-    shadowRadius: 24,
-    elevation: 16,
-  },
-  formTitle: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#1F2937',
-    textAlign: 'center',
-    marginBottom: 8,
-  },
-  formSubtitle: {
+  brandTagline: {
     fontSize: 16,
-    color: '#6B7280',
-    textAlign: 'center',
-    marginBottom: 32,
+    color: 'rgba(255, 255, 255, 0.95)',
+    fontWeight: '600',
+    textShadowColor: 'rgba(0, 0, 0, 0.2)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+  },
+  loginFormCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.98)',
+    borderRadius: 15,
+    padding: 30,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 20 },
+    shadowOpacity: 0.3,
+    shadowRadius: 30,
+    elevation: 20,
+  },
+  welcomeText: {
+    fontSize: 32,
+    fontWeight: '800',
+    color: '#1A202C',
+    marginBottom: 6,
+  },
+  welcomeSubtext: {
+    fontSize: 16,
+    color: '#718096',
+    marginBottom: 30,
     fontWeight: '500',
   },
-  nameRowContainer: {
-    flexDirection: 'row',
-    gap: 12,
-    marginBottom: 24,
+  formGroup: {
+    marginBottom: 18,
   },
-  nameInputContainer: {
-    flex: 1,
+  fieldLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#2D3748',
+    marginBottom: 8,
+  },
+  asterisk: {
+    color: '#F56565',
+    fontSize: 14,
+    fontWeight: '700',
   },
   inputContainer: {
-    marginBottom: 24,
-  },
-  label: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#374151',
-    marginBottom: 8,
-  },
-  required: {
-    color: '#EF4444',
-    fontWeight: 'bold',
-  },
-  labelSubtext: {
-    fontSize: 14,
-    color: '#6B7280',
-    marginBottom: 12,
-    fontStyle: 'italic',
-  },
-  inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#E5E7EB',
-    borderRadius: 16,
-    backgroundColor: '#F9FAFB',
-    paddingHorizontal: 16,
-    minHeight: 56,
+    backgroundColor: '#F7FAFC',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
   },
-  inputWrapperError: {
-    borderColor: '#EF4444',
+  inputError: {
+    borderColor: '#F56565',
+    backgroundColor: '#FFF5F5',
   },
-  inputIcon: {
-    marginRight: 12,
+  icon: {
+    marginRight: 10,
   },
-  input: {
+  fieldInput: {
     flex: 1,
-    fontSize: 16,
-    color: '#1F2937',
+    fontSize: 15,
+    color: '#1A202C',
     fontWeight: '500',
   },
-  loadingIcon: {
-    marginLeft: 8,
-  },
-  eyeButton: {
-    padding: 4,
-  },
-  successText: {
-    fontSize: 12,
-    color: '#10B981',
-    marginTop: 4,
-    fontWeight: '500',
-  },
-  validationText: {
-    fontSize: 12,
-    color: '#F59E0B',
-    marginTop: 4,
-    fontWeight: '500',
-  },
-  errorText: {
-    fontSize: 12,
-    color: '#EF4444',
-    marginTop: 4,
-    fontWeight: '500',
-  },
-  imageUploadContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 12,
-  },
-  imageUploadButton: {
-    flex: 1,
-    borderWidth: 2,
-    borderColor: '#6366F1',
-    borderStyle: 'dashed',
-    borderRadius: 16,
-    paddingVertical: 24,
-    alignItems: 'center',
-    backgroundColor: '#F8FAFC',
-  },
-  imageUploadText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#6366F1',
+  fieldHint: {
+    fontSize: 13,
+    color: '#718096',
     marginTop: 8,
+    fontWeight: '500',
   },
-  imagePreviewContainer: {
-    alignItems: 'center',
-  },
-  imagePreview: {
-    width: '100%',
-    height: 200,
-    borderRadius: 16,
-    resizeMode: 'cover',
-    marginBottom: 16,
-  },
-  changeImageButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    backgroundColor: '#6366F1',
-    borderRadius: 12,
-  },
-  changeImageText: {
-    color: '#FFFFFF',
+  fieldError: {
+    fontSize: 13,
+    color: '#F56565',
+    marginTop: 8,
     fontWeight: '600',
-    fontSize: 14,
   },
-  verificationStatus: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FEF3C7',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 24,
-    borderLeftWidth: 4,
-    borderLeftColor: '#F59E0B',
-  },
-  verificationPassed: {
-    backgroundColor: '#D1FAE5',
-    borderLeftColor: '#10B981',
-  },
-  verificationStatusText: {
-    fontSize: 14,
+  fieldSuccess: {
+    fontSize: 13,
+    color: '#10B981',
+    marginTop: 8,
     fontWeight: '600',
-    color: '#92400E',
-    flex: 1,
   },
-  verificationPassedText: {
-    color: '#065F46',
-  },
-  submitButton: {
-    backgroundColor: '#6366F1',
+  primaryBtn: {
+    flexDirection: 'row',
+    backgroundColor: '#667eea',
     borderRadius: 16,
     paddingVertical: 18,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#6366F1',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
+    gap: 10,
+    shadowColor: '#667eea',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.4,
+    shadowRadius: 12,
     elevation: 8,
-    marginTop: 8,
+    marginTop: 10,
   },
-  submitButtonDisabled: {
+  btnDisabled: {
     opacity: 0.6,
   },
-  submitButtonText: {
+  primaryBtnText: {
     color: '#FFFFFF',
-    fontSize: 18,
-    fontWeight: 'bold',
+    fontSize: 17,
+    fontWeight: '800',
+    letterSpacing: 0.5,
   },
+  separatorContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 28,
+  },
+  separatorLine: {
+    flex: 1,
+    height: 1.5,
+    backgroundColor: '#E2E8F0',
+  },
+  separatorText: {
+    paddingHorizontal: 20,
+    fontSize: 14,
+    color: '#A0AEC0',
+    fontWeight: '700',
+  },
+  secondaryBtn: {
+    flexDirection: 'row',
+    backgroundColor: '#F7FAFC',
+    borderRadius: 16,
+    paddingVertical: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    borderWidth: 2,
+    borderColor: '#C7D2FE',
+  },
+  secondaryBtnText: {
+    color: '#667eea',
+    fontSize: 17,
+    fontWeight: '800',
+  },
+  registerTopBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 30,
+  },
+  backIconBtn: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 16,
+  },
+  topBarInfo: {
+    flex: 1,
+  },
+  topBarTitle: {
+    fontSize: 28,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    marginBottom: 4,
+    textShadowColor: 'rgba(0, 0, 0, 0.3)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 4,
+  },
+  topBarStep: {
+    fontSize: 14,
+    color: 'rgba(255, 255, 255, 0.9)',
+    fontWeight: '600',
+  },
+  progressWrapper: {
+    marginBottom: 30,
+  },
+  progressBarContainer: {
+    height: 6,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    borderRadius: 10,
+    overflow: 'hidden',
+    marginBottom: 20,
+  },
+  progressBar: {
+    height: '100%',
+    backgroundColor: '#10B981',
+    borderRadius: 10,
+  },
+  progressSteps: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  progressStepItem: {
+    alignItems: 'center',
+  },
+  stepCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
+  stepCircleActive: {
+    backgroundColor: '#667eea',
+    shadowColor: '#667eea',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  stepCircleCompleted: {
+    backgroundColor: '#10B981',
+  },
+  stepNumber: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: 'rgba(255, 255, 255, 0.7)',
+  },
+  stepNumberActive: {
+    color: '#FFFFFF',
+  },
+  stepLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: 'rgba(255, 255, 255, 0.7)',
+  },
+  stepLabelActive: {
+    color: '#FFFFFF',
+  },
+  registerFormCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.98)',
+    borderRadius: 15,
+    padding: 30,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 20 },
+    shadowOpacity: 0.3,
+    shadowRadius: 30,
+    elevation: 20,
+  },
+  stepWrapper: {
+    marginBottom: 20,
+  },
+  stepHeaderSection: {
+    alignItems: 'center',
+    marginBottom: 30,
+  },
+  stepMainTitle: {
+    fontSize: 26,
+    fontWeight: '800',
+    color: '#1A202C',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  stepDescription: {
+    fontSize: 15,
+    color: '#718096',
+    textAlign: 'center',
+    fontWeight: '500',
+  },
+  uploadContainer: {
+    alignItems: 'center',
+  },
+  uploadPlaceholder: {
+    width: '100%',
+    paddingVertical: 40,
+    backgroundColor: '#F7FAFC',
+    borderRadius: 20,
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#C7D2FE',
+    borderStyle: 'dashed',
+    marginBottom: 20,
+  },
+  uploadTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#2D3748',
+    marginTop: 16,
+    marginBottom: 6,
+  },
+  uploadSubtitle: {
+    fontSize: 14,
+    color: '#718096',
+    fontWeight: '500',
+  },
+  uploadButtons: {
+    flexDirection: 'row',
+    gap: 15,
+    width: '100%',
+  },
+  uploadBtn: {
+    flex: 1,
+    backgroundColor: '#F7FAFC',
+    borderRadius: 16,
+    paddingVertical: 24,
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#C7D2FE',
+  },
+  uploadBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#667eea',
+    marginTop: 10,
+  },
+  imagePreview: {
+    width: '100%',
+    alignItems: 'center',
+  },
+  uploadedImage: {
+    width: '100%',
+    height: 220,
+    borderRadius: 20,
+    resizeMode: 'cover',
+    marginBottom: 16,
+  },
+  changeImageBtn: {
+    flexDirection: 'row',
+    backgroundColor: '#667eea',
+    borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    alignItems: 'center',
+    gap: 8,
+    shadowColor: '#667eea',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    elevation: 6,
+  },
+  changeImageText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  verificationIcon: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#10B981',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
+    shadowColor: '#10B981',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  verificationBox: {
+    backgroundColor: '#F7FAFC',
+    borderRadius: 20,
+    padding: 24,
+    marginBottom: 20,
+    borderWidth: 2,
+    borderColor: '#C7D2FE',
+  },
+  verificationQuestion: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: '#1A202C',
+    marginBottom: 8,
+  },
+  verificationHint: {
+    fontSize: 14,
+    color: '#718096',
+    marginBottom: 20,
+    fontWeight: '500',
+    lineHeight: 20,
+  },
+  reviewBox: {
+    backgroundColor: '#F0FDF4',
+    borderRadius: 20,
+    padding: 24,
+    borderWidth: 2,
+    borderColor: '#BBF7D0',
+  },
+  reviewTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#166534',
+    marginBottom: 20,
+  },
+  reviewRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingBottom: 16,
+    marginBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#BBF7D0',
+  },
+  reviewIconCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#DCFCE7',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 14,
+  },
+  reviewContent: {
+    flex: 1,
+  },
+  reviewLabel: {
+    fontSize: 12,
+    color: '#166534',
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  reviewValue: {
+    fontSize: 15,
+    color: '#14532D',
+    fontWeight: '800',
+  },
+  actionButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 10,
+  },
+  backBtn: {
+    flexDirection: 'row',
+    flex: 1,
+    backgroundColor: '#F7FAFC',
+    borderRadius: 16,
+    paddingVertical: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    borderWidth: 2,
+    borderColor: '#C7D2FE',
+  },
+  backBtnText: {
+    color: '#667eea',
+    fontSize: 16,
+    fontWeight: '800',
+  },
+  continueBtn: {
+    flexDirection: 'row',
+    flex: 2,
+    backgroundColor: '#667eea',
+    borderRadius: 16,
+    paddingVertical: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    shadowColor: '#667eea',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.4,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  continueBtnFull: {
+    flex: 1,
+  },
+  continueBtnText: {
+    color: '#FFFFFF',
+    fontSize: 17,
+    fontWeight: '800',
+  },
+  finishBtn: {
+    flexDirection: 'row',
+    flex: 1,
+    backgroundColor: '#10B981',
+    borderRadius: 16,
+    paddingVertical: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    shadowColor: '#10B981',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.4,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  finishBtnText: {
+    color: '#FFFFFF',
+    fontSize: 17,
+    fontWeight: '800',
+  },
+  // Data Privacy Modal
   modalOverlay: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.6)',
+    backgroundColor: 'rgba(0, 0, 0, 0.85)',
     justifyContent: 'center',
     alignItems: 'center',
-    zIndex: 1000,
+    zIndex: 10000,
+    padding: 20,
   },
-  modalContainer: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 24,
-    padding: 32,
-    marginHorizontal: 24,
-    width: width - 48,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 20 },
-    shadowOpacity: 0.3,
-    shadowRadius: 40,
-    elevation: 24,
-  },
-  modalHeader: {
-    alignItems: 'center',
-    marginBottom: 24,
-  },
-  modalIconContainer: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: '#EEF2FF',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  modalTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#1F2937',
-    textAlign: 'center',
-    marginBottom: 8,
-  },
-  modalSubtitle: {
-    fontSize: 16,
-    color: '#6B7280',
-    textAlign: 'center',
-    lineHeight: 24,
-  },
-  modalButtonContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 24,
-    gap: 12,
-  },
-  modalCancelButton: {
-    flex: 1,
-    paddingVertical: 14,
-    borderRadius: 12,
-    backgroundColor: '#F3F4F6',
-    alignItems: 'center',
-  },
-  modalCancelText: {
-    color: '#6B7280',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  modalVerifyButton: {
-    flex: 1,
-    paddingVertical: 14,
-    borderRadius: 12,
-    backgroundColor: '#6366F1',
-    alignItems: 'center',
-  },
-  modalVerifyText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  // Data Privacy Modal Styles
   privacyModalContainer: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 24,
-    marginHorizontal: 20,
-    width: width - 40,
+    borderRadius: 30,
+    width: '100%',
+    maxWidth: 450,
     maxHeight: height * 0.85,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 20 },
-    shadowOpacity: 0.3,
+    shadowOffset: { width: 0, height: 25 },
+    shadowOpacity: 0.5,
     shadowRadius: 40,
-    elevation: 24,
+    elevation: 30,
+    overflow: 'hidden',
   },
-  privacyScrollView: {
-    maxHeight: height * 0.65,
-  },
-  privacyHeader: {
-    alignItems: 'center',
-    paddingTop: 32,
-    paddingHorizontal: 24,
-    paddingBottom: 16,
-    borderBottomWidth: 2,
-    borderBottomColor: '#E5E7EB',
-  },
-  privacyTitle: {
-    fontSize: 26,
-    fontWeight: 'bold',
-    color: '#1F2937',
-    textAlign: 'center',
-    marginTop: 16,
-  },
-  privacyContent: {
-    padding: 24,
+privacyModalHeader: {
+  backgroundColor: '#667eea',
+  paddingTop: 30,
+  paddingBottom: 20,
+  paddingHorizontal: 30,
+  alignItems: 'center',
+},
+shieldCircle: {
+  width: 70,
+  height: 70,
+  borderRadius: 35,
+  backgroundColor: 'rgba(255, 255, 255, 0.25)',
+  alignItems: 'center',
+  justifyContent: 'center',
+  marginBottom: 15,
+},
+privacyModalTitle: {
+  fontSize: 22,
+  fontWeight: '800',
+  color: '#FFFFFF',
+  marginBottom: 6,
+  textAlign: 'center',
+},
+privacyModalSubtitle: {
+  fontSize: 13,
+  color: 'rgba(255, 255, 255, 0.95)',
+  fontWeight: '600',
+  textAlign: 'center',
+},
+  privacyScrollContent: {
+    maxHeight: height * 0.4,
+    paddingHorizontal: 30,
+    paddingVertical: 24,
   },
   privacySection: {
-    marginBottom: 20,
-    fontSize: 14,
-    color: '#4B5563',
-    lineHeight: 22,
+    marginBottom: 24,
+  },
+  privacySectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+    gap: 10,
   },
   privacySectionTitle: {
     fontSize: 16,
-    fontWeight: 'bold',
-    color: '#1F2937',
+    fontWeight: '800',
+    color: '#1A202C',
   },
-  privacyBold: {
-    fontWeight: '600',
-    color: '#374151',
+  privacySectionText: {
+    fontSize: 14,
+    color: '#4A5568',
+    lineHeight: 22,
+    fontWeight: '500',
   },
-  privacyFooter: {
-    marginTop: 8,
-    marginBottom: 16,
+  privacyFooterBox: {
+    backgroundColor: '#F7FAFC',
+    borderRadius: 16,
+    padding: 20,
+    marginTop: 10,
+    borderWidth: 2,
+    marginBottom: 40,
+    borderColor: '#E2E8F0',
+  },
+  privacyFooterText: {
     fontSize: 13,
-    color: '#6B7280',
-    fontStyle: 'italic',
+    color: '#4A5568',
     lineHeight: 20,
+    fontWeight: '600',
+    fontStyle: 'italic',
     textAlign: 'center',
-    paddingHorizontal: 8,
   },
-  privacyButtonContainer: {
+  privacyButtonGroup: {
     flexDirection: 'row',
-    padding: 24,
-    paddingTop: 16,
+    padding: 30,
+    paddingTop: 20,
     gap: 12,
     borderTopWidth: 2,
-    borderTopColor: '#E5E7EB',
+    borderTopColor: '#F7FAFC',
   },
-  privacyDeclineButton: {
+  declineButton: {
     flex: 1,
     paddingVertical: 16,
-    borderRadius: 12,
-    backgroundColor: '#F3F4F6',
+    borderRadius: 16,
+    backgroundColor: '#F7FAFC',
     alignItems: 'center',
     borderWidth: 2,
-    borderColor: '#E5E7EB',
+    borderColor: '#E2E8F0',
   },
-  privacyDeclineText: {
-    color: '#6B7280',
+  declineButtonText: {
+    color: '#718096',
     fontSize: 16,
-    fontWeight: '700',
+    fontWeight: '800',
   },
-  privacyAcceptButton: {
-    flex: 1,
+  acceptButton: {
+    flex: 1.5,
+    flexDirection: 'row',
     paddingVertical: 16,
-    borderRadius: 12,
+    borderRadius: 16,
     backgroundColor: '#10B981',
     alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
     shadowColor: '#10B981',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 6,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.4,
+    shadowRadius: 12,
+    elevation: 8,
   },
-  privacyAcceptText: {
+  acceptButtonText: {
     color: '#FFFFFF',
     fontSize: 16,
-    fontWeight: '700',
+    fontWeight: '800',
   },
 });
