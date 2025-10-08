@@ -952,209 +952,205 @@ const handleAcceptPrivacy = async () => {
     }
   };
 
- return (
-<KeyboardAvoidingView 
-  style={styles.container}
-  behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-  keyboardVerticalOffset={0}
->
-      {isLogin ? (
-        // Login Screen
-        <>
-          <StatusBar barStyle="light-content" backgroundColor="rgba(102, 126, 234, 0.9)" />
-          <ImageBackground
-            source={require('./assets/brgysambag.jpg')}
-            style={styles.backgroundImage}
-            resizeMode="cover"
+return (
+  <View style={styles.container}>
+    {isLogin ? (
+      // Login Screen
+      <>
+        <StatusBar barStyle="light-content" backgroundColor="rgba(102, 126, 234, 0.9)" />
+        <ImageBackground
+          source={require('./assets/brgysambag.jpg')}
+          style={styles.backgroundImage}
+          resizeMode="cover"
+        >
+          <View style={styles.overlay} />
+          
+          <ScrollView 
+            contentContainerStyle={styles.scrollContent}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag"
+            automaticallyAdjustKeyboardInsets={true}
+            contentInsetAdjustmentBehavior="automatic"
           >
-            <View style={styles.overlay} />
-            
-<ScrollView 
-  contentContainerStyle={styles.scrollContent}
-  showsVerticalScrollIndicator={false}
-  keyboardShouldPersistTaps="handled"
-  onScrollBeginDrag={Keyboard.dismiss}
-  contentInsetAdjustmentBehavior="automatic"
->
-              {/* All your login screen content */}
-              <View style={styles.logoSection}>
-                <View style={styles.logoWrapper}>
-                  <Image
-                    source={require("./assets/sambaglogo.png")}
-                    style={styles.logoImage}
-                    resizeMode="contain"
+            <View style={styles.logoSection}>
+              <View style={styles.logoWrapper}>
+                <Image
+                  source={require("./assets/sambaglogo.png")}
+                  style={styles.logoImage}
+                  resizeMode="contain"
+                />
+              </View>
+              <Text style={styles.brandName}>Sambag 2</Text>
+              <Text style={styles.brandTagline}>Emergency Response System</Text>
+            </View>
+
+            <View style={styles.loginFormCard}>
+              <Text style={styles.welcomeText}>Welcome Back!</Text>
+              <Text style={styles.welcomeSubtext}>Sign in to your account</Text>
+
+              <View style={styles.formGroup}>
+                <Text style={styles.fieldLabel}>Username</Text>
+                <View style={styles.inputContainer}>
+                  <Ionicons name="person" size={20} color="#667eea" style={styles.icon} />
+                  <TextInput
+                    style={styles.fieldInput}
+                    placeholder="Enter your username"
+                    value={loginUsername}
+                    onChangeText={setLoginUsername}
+                    autoCapitalize="none"
+                    placeholderTextColor="#A0AEC0"
                   />
                 </View>
-                <Text style={styles.brandName}>Sambag 2</Text>
-                <Text style={styles.brandTagline}>Emergency Response System</Text>
               </View>
 
-              <View style={styles.loginFormCard}>
-                <Text style={styles.welcomeText}>Welcome Back!</Text>
-                <Text style={styles.welcomeSubtext}>Sign in to your account</Text>
-
-                <View style={styles.formGroup}>
-                  <Text style={styles.fieldLabel}>Username</Text>
-                  <View style={styles.inputContainer}>
-                    <Ionicons name="person" size={20} color="#667eea" style={styles.icon} />
-                    <TextInput
-                      style={styles.fieldInput}
-                      placeholder="Enter your username"
-                      value={loginUsername}
-                      onChangeText={setLoginUsername}
-                      autoCapitalize="none"
-                      placeholderTextColor="#A0AEC0"
+              <View style={styles.formGroup}>
+                <Text style={styles.fieldLabel}>Password</Text>
+                <View style={styles.inputContainer}>
+                  <Ionicons name="lock-closed" size={20} color="#667eea" style={styles.icon} />
+                  <TextInput
+                    style={styles.fieldInput}
+                    placeholder="Enter your password"
+                    value={loginPassword}
+                    onChangeText={setLoginPassword}
+                    secureTextEntry={!showLoginPassword}
+                    placeholderTextColor="#A0AEC0"
+                  />
+                  <TouchableOpacity onPress={() => setShowLoginPassword(!showLoginPassword)} activeOpacity={0.7}>
+                    <Ionicons 
+                      name={showLoginPassword ? "eye" : "eye-off"} 
+                      size={20} 
+                      color="#A0AEC0" 
                     />
-                  </View>
+                  </TouchableOpacity>
                 </View>
-
-                <View style={styles.formGroup}>
-                  <Text style={styles.fieldLabel}>Password</Text>
-                  <View style={styles.inputContainer}>
-                    <Ionicons name="lock-closed" size={20} color="#667eea" style={styles.icon} />
-                    <TextInput
-                      style={styles.fieldInput}
-                      placeholder="Enter your password"
-                      value={loginPassword}
-                      onChangeText={setLoginPassword}
-                      secureTextEntry={!showLoginPassword}
-                      placeholderTextColor="#A0AEC0"
-                    />
-                    <TouchableOpacity onPress={() => setShowLoginPassword(!showLoginPassword)} activeOpacity={0.7}>
-                      <Ionicons 
-                        name={showLoginPassword ? "eye" : "eye-off"} 
-                        size={20} 
-                        color="#A0AEC0" 
-                      />
-                    </TouchableOpacity>
-                  </View>
-                </View>
-
-                <TouchableOpacity
-                  style={[styles.primaryBtn, loading && styles.btnDisabled]}
-                  onPress={handleLogin}
-                  disabled={loading}
-                  activeOpacity={0.8}
-                >
-                  {loading ? (
-                    <Text style={styles.primaryBtnText}>Signing in...</Text>
-                  ) : (
-                    <>
-                      <Text style={styles.primaryBtnText}>Sign In</Text>
-                      <Ionicons name="arrow-forward" size={20} color="#FFFFFF" />
-                    </>
-                  )}
-                </TouchableOpacity>
-
-                <View style={styles.separatorContainer}>
-                  <View style={styles.separatorLine} />
-                  <Text style={styles.separatorText}>or</Text>
-                  <View style={styles.separatorLine} />
-                </View>
-
-                <TouchableOpacity
-                  style={styles.secondaryBtn}
-                  onPress={switchToRegister}
-                  activeOpacity={0.8}
-                >
-                  <Ionicons name="person-add" size={20} color="#667eea" />
-                  <Text style={styles.secondaryBtnText}>Create New Account</Text>
-                </TouchableOpacity>
               </View>
-            </ScrollView>
-          </ImageBackground>
-        </>
-      ) : (
-        // Register Screen
-        <>
-          <StatusBar barStyle="light-content" backgroundColor="rgba(102, 126, 234, 0.9)" />
-          <ImageBackground
-            source={require('./assets/brgysambag.jpg')}
-            style={styles.backgroundImage}
-            resizeMode="cover"
+
+              <TouchableOpacity
+                style={[styles.primaryBtn, loading && styles.btnDisabled]}
+                onPress={handleLogin}
+                disabled={loading}
+                activeOpacity={0.8}
+              >
+                {loading ? (
+                  <Text style={styles.primaryBtnText}>Signing in...</Text>
+                ) : (
+                  <>
+                    <Text style={styles.primaryBtnText}>Sign In</Text>
+                    <Ionicons name="arrow-forward" size={20} color="#FFFFFF" />
+                  </>
+                )}
+              </TouchableOpacity>
+
+              <View style={styles.separatorContainer}>
+                <View style={styles.separatorLine} />
+                <Text style={styles.separatorText}>or</Text>
+                <View style={styles.separatorLine} />
+              </View>
+
+              <TouchableOpacity
+                style={styles.secondaryBtn}
+                onPress={switchToRegister}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="person-add" size={20} color="#667eea" />
+                <Text style={styles.secondaryBtnText}>Create New Account</Text>
+              </TouchableOpacity>
+            </View>
+          </ScrollView>
+        </ImageBackground>
+      </>
+    ) : (
+      // Register Screen
+      <>
+        <StatusBar barStyle="light-content" backgroundColor="rgba(102, 126, 234, 0.9)" />
+        <ImageBackground
+          source={require('./assets/brgysambag.jpg')}
+          style={styles.backgroundImage}
+          resizeMode="cover"
+        >
+          <View style={styles.overlay} />
+          
+          <ScrollView 
+            contentContainerStyle={styles.registerScrollContent}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag"
+            automaticallyAdjustKeyboardInsets={true}
+            contentInsetAdjustmentBehavior="automatic"
           >
-            <View style={styles.overlay} />
-            
-<ScrollView 
-  contentContainerStyle={styles.registerScrollContent}
-  showsVerticalScrollIndicator={false}
-  keyboardShouldPersistTaps="handled"
-  onScrollBeginDrag={Keyboard.dismiss}
-  contentInsetAdjustmentBehavior="automatic"
->
-              {/* All your register screen content */}
-              <View style={styles.registerTopBar}>
-                <TouchableOpacity 
-                  style={styles.backIconBtn}
-                  onPress={switchToLogin}
-                  activeOpacity={0.7}
-                >
-                  <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
-                </TouchableOpacity>
-                <View style={styles.topBarInfo}>
-                  <Text style={styles.topBarTitle}>Create Account</Text>
-                  <Text style={styles.topBarStep}>Step {registrationStep} of 4</Text>
-                </View>
+            <View style={styles.registerTopBar}>
+              <TouchableOpacity 
+                style={styles.backIconBtn}
+                onPress={switchToLogin}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
+              </TouchableOpacity>
+              <View style={styles.topBarInfo}>
+                <Text style={styles.topBarTitle}>Create Account</Text>
+                <Text style={styles.topBarStep}>Step {registrationStep} of 4</Text>
               </View>
+            </View>
 
-              {renderProgressIndicator()}
+            {renderProgressIndicator()}
 
-              <View style={styles.registerFormCard}>
-                {renderStepContent()}
+            <View style={styles.registerFormCard}>
+              {renderStepContent()}
 
-                <View style={styles.actionButtons}>
-                  {registrationStep > 1 && (
-                    <TouchableOpacity
-                      style={styles.backBtn}
-                      onPress={handlePreviousStep}
-                      activeOpacity={0.8}
-                    >
-                      <Ionicons name="chevron-back" size={20} color="#667eea" />
-                      <Text style={styles.backBtnText}>Back</Text>
-                    </TouchableOpacity>
-                  )}
+              <View style={styles.actionButtons}>
+                {registrationStep > 1 && (
+                  <TouchableOpacity
+                    style={styles.backBtn}
+                    onPress={handlePreviousStep}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons name="chevron-back" size={20} color="#667eea" />
+                    <Text style={styles.backBtnText}>Back</Text>
+                  </TouchableOpacity>
+                )}
 
-                  {registrationStep < 4 ? (
-                    <TouchableOpacity
-                      style={[styles.continueBtn, registrationStep === 1 && styles.continueBtnFull]}
-                      onPress={handleNextStep}
-                      activeOpacity={0.8}
-                    >
-                      <Text style={styles.continueBtnText}>Continue</Text>
-                      <Ionicons name="chevron-forward" size={20} color="#FFFFFF" />
-                    </TouchableOpacity>
-                  ) : (
-                    <TouchableOpacity
-                      style={[styles.finishBtn, loading && styles.btnDisabled]}
-                      onPress={verifyBarangayOfficial}
-                      disabled={loading}
-                      activeOpacity={0.8}
-                    >
-                      {loading ? (
-                        <Text style={styles.finishBtnText}>Verifying...</Text>
-                      ) : (
-                        <>
-                          <Text style={styles.finishBtnText}>Register</Text>
-                          <Ionicons name="checkmark-circle" size={22} color="#FFFFFF" />
-                        </>
-                      )}
-                    </TouchableOpacity>
-                  )}
-                </View>
+                {registrationStep < 4 ? (
+                  <TouchableOpacity
+                    style={[styles.continueBtn, registrationStep === 1 && styles.continueBtnFull]}
+                    onPress={handleNextStep}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={styles.continueBtnText}>Continue</Text>
+                    <Ionicons name="chevron-forward" size={20} color="#FFFFFF" />
+                  </TouchableOpacity>
+                ) : (
+                  <TouchableOpacity
+                    style={[styles.finishBtn, loading && styles.btnDisabled]}
+                    onPress={verifyBarangayOfficial}
+                    disabled={loading}
+                    activeOpacity={0.8}
+                  >
+                    {loading ? (
+                      <Text style={styles.finishBtnText}>Verifying...</Text>
+                    ) : (
+                      <>
+                        <Text style={styles.finishBtnText}>Register</Text>
+                        <Ionicons name="checkmark-circle" size={22} color="#FFFFFF" />
+                      </>
+                    )}
+                  </TouchableOpacity>
+                )}
               </View>
-            </ScrollView>
-          </ImageBackground>
-        </>
-      )}
+            </View>
+          </ScrollView>
+        </ImageBackground>
+      </>
+    )}
 
-      {/* Data Privacy Modal - Now renders on BOTH screens */}
-      <DataPrivacyModal
-        visible={showDataPrivacy}
-        onAccept={handleAcceptPrivacy}
-        onDecline={handleDeclinePrivacy}
-      />
-    </KeyboardAvoidingView>
-  );
+    {/* Data Privacy Modal */}
+    <DataPrivacyModal
+      visible={showDataPrivacy}
+      onAccept={handleAcceptPrivacy}
+      onDecline={handleDeclinePrivacy}
+    />
+  </View>
+);
 }
 
 const styles = StyleSheet.create({
@@ -1399,7 +1395,7 @@ const styles = StyleSheet.create({
   },
   progressBar: {
     height: '100%',
-    backgroundColor: '#10B981',
+    backgroundColor: '#ffffffff',
     borderRadius: 10,
   },
   progressSteps: {

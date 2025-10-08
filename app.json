@@ -13,10 +13,10 @@
       "backgroundColor": "#ffffff"
     },
     "android": {
+      "softwareKeyboardLayoutMode": "resize",
       "adaptiveIcon": {
         "foregroundImage": "./assets/icon.png",
-        "backgroundColor": "#ffffff",
-        "softwareKeyboardLayoutMode": "pan"
+        "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
       "config": {
