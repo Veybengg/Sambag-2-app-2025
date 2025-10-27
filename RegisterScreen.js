@@ -1264,8 +1264,6 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderWidth: 1.5,
     borderColor: '#E2E8F0',
-    minHeight: 50,
-  position: 'relative',
   },
   inputError: {
     borderColor: '#F56565',
@@ -1276,9 +1274,10 @@ const styles = StyleSheet.create({
   },
   fieldInput: {
     flex: 1,
-    fontSize: 16,
+    fontSize: 15,
     color: '#1A202C',
     fontWeight: '500',
+    minWidth: 0,
   },
   fieldHint: {
     fontSize: 13,
